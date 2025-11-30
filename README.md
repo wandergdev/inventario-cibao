@@ -28,6 +28,8 @@ inventario-cibao/
     ├── src/index.ts                # servidor Express + /health
     ├── db_schema.sql               # script SQL para crear tablas base
     └── create_database.sql         # script opcional para crear usuario/base inv_cibao
+├── docs/
+│   └── der.drawio                  # DER actualizado del sistema
 ```
 
 ## Backend (`server/`)
@@ -41,6 +43,7 @@ inventario-cibao/
 4. Levanta el backend: `npm run dev`
 5. Verifica [http://localhost:4000/health](http://localhost:4000/health) y la documentación [http://localhost:4000/docs](http://localhost:4000/docs)
 6. Para producción: `npm run build` y `npm start`
+7. (Opcional pero recomendado) Ejecuta `npm run seed` para poblar los roles base y un usuario Gerente General (`gerente@electrocibao.com / cibaoAdmin123`)
 
 ### Crear la base de datos
 
@@ -67,3 +70,14 @@ inventario-cibao/
 5. Abre [http://localhost:3000](http://localhost:3000)
 
 > Desde el frontend consumirás el backend usando la URL definida en `NEXT_PUBLIC_API_BASE_URL`.
+
+### Endpoints actuales del backend
+
+- `POST /auth/login`: recibe `{ email, password }` y responde con un JWT y los datos del usuario.
+- `/users` (requiere token Bearer):
+  - `GET /users`: listado filtrable por `?role=` y `?active=`. Disponible para Encargado de Tienda y Gerente General.
+  - `POST /users`: crea usuarios con nombre, apellido, email, password y rol.
+  - `PATCH /users/:id`: actualiza datos, rol, estado o contraseña.
+  - `DELETE /users/:id`: solo el Gerente General puede eliminar usuarios (no puede eliminar a otro gerente).
+
+Incluye el header `Authorization: Bearer <token>` en cada petición protegida. Añadiremos más módulos (productos, inventario, reportes) siguiendo el documento del proyecto.

@@ -17,3 +17,6 @@ web/.env
 web/.env.*
 server/.env
 server/.env.*
+
+# Documentación
+docs/
