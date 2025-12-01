@@ -6,6 +6,8 @@ import { env } from "./config/env";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./docs/swagger";
 import usersRouter from "./routes/users";
+import suppliersRouter from "./routes/suppliers";
+import productsRouter from "./routes/products";
 
 const app = express();
 
@@ -19,6 +21,8 @@ app.get("/health", (_req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/users", usersRouter);
+app.use("/suppliers", suppliersRouter);
+app.use("/products", productsRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error", err);

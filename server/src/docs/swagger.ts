@@ -55,6 +55,75 @@ const options: Options = {
             roleName: { type: "string" },
             activo: { type: "boolean" }
           }
+        },
+        Supplier: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            nombreEmpresa: { type: "string" },
+            direccion: { type: "string" },
+            telefono: { type: "string" },
+            contactoVendedor: { type: "string" },
+            diasCredito: { type: "integer" },
+            activo: { type: "boolean" },
+            fechaRegistro: { type: "string", format: "date-time" }
+          }
+        },
+        SupplierInput: {
+          type: "object",
+          properties: {
+            nombreEmpresa: { type: "string" },
+            direccion: { type: "string" },
+            telefono: { type: "string" },
+            contactoVendedor: { type: "string" },
+            diasCredito: { type: "integer" },
+            activo: { type: "boolean" }
+          }
+        },
+        Product: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            nombre: { type: "string" },
+            descripcion: { type: "string" },
+            precioTienda: { type: "number", format: "float" },
+            precioRuta: { type: "number", format: "float" },
+            stockActual: { type: "integer" },
+            stockMinimo: { type: "integer" },
+            disponible: { type: "boolean" },
+            motivoNoDisponible: { type: "string" },
+            suplidorId: { type: "string", format: "uuid" },
+            suplidor: { type: "string" }
+          }
+        },
+        ProductCreateInput: {
+          type: "object",
+          required: ["nombre", "precioTienda", "precioRuta"],
+          properties: {
+            nombre: { type: "string" },
+            descripcion: { type: "string" },
+            precioTienda: { type: "number", format: "float" },
+            precioRuta: { type: "number", format: "float" },
+            stockActual: { type: "integer" },
+            stockMinimo: { type: "integer" },
+            suplidorId: { type: "string", format: "uuid" },
+            disponible: { type: "boolean" },
+            motivoNoDisponible: { type: "string" }
+          }
+        },
+        ProductUpdateInput: {
+          type: "object",
+          properties: {
+            nombre: { type: "string" },
+            descripcion: { type: "string" },
+            precioTienda: { type: "number", format: "float" },
+            precioRuta: { type: "number", format: "float" },
+            stockActual: { type: "integer" },
+            stockMinimo: { type: "integer" },
+            suplidorId: { type: "string", format: "uuid" },
+            disponible: { type: "boolean" },
+            motivoNoDisponible: { type: "string" }
+          }
         }
       }
     }
