@@ -32,3 +32,22 @@ export type Product = {
 export type ApiError = {
   message?: string;
 };
+
+export type SalidaDetalle = {
+  producto: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+};
+
+export type Salida = {
+  id: string;
+  ticket: string;
+  fecha_salida: string;
+  fecha_entrega: string | null;
+  total: number;
+  estado: string;
+  tipo_salida: string;
+  vendedor: string;
+  detalles: SalidaDetalle[];
+};

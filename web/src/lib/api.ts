@@ -1,4 +1,4 @@
-import { ApiError, LoginResponse, Product, Supplier } from "@/types";
+import { ApiError, LoginResponse, Product, Supplier, Salida } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -49,5 +49,22 @@ export async function createProduct(
     method: "POST",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
     body: JSON.stringify({ ...payload, precioTienda: 1, precioRuta: 1 })
+  });
+}
+
+export async function fetchSalidas(token: string) {
+  return apiFetch<Salida[]>("/salidas", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function createSalida(
+  token: string,
+  payload: { tipoSalida?: "tienda" | "ruta"; productos: Array<{ productId: string; cantidad: number; precioUnitario?: number }>; fechaEntrega?: string }
+) {
+  return apiFetch<Salida>("/salidas", {
+    method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
   });
 }

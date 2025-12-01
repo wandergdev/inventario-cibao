@@ -10,14 +10,14 @@ import {
   LayoutDashboard,
   PackageCheck,
   Settings,
-  ShoppingCart,
-  UsersRound
+  UsersRound,
+  Truck
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Productos", href: "/products", icon: PackageCheck },
-  { label: "Ventas", href: "#", icon: ShoppingCart },
+  { label: "Salidas", href: "/salidas", icon: Truck },
   { label: "Inventario", href: "#", icon: Boxes },
   { label: "Suplidores", href: "/suppliers", icon: ClipboardList },
   { label: "Reportes", href: "#", icon: BarChart3 },
