@@ -5,10 +5,12 @@ import AppShell from "@/components/layout/AppShell";
 import ManagementSection from "@/components/dashboard/ManagementSection";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import StatsGrid from "@/components/dashboard/StatsGrid";
 import { useAuth } from "@/context/AuthContext";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { Product } from "@/types";
 import { createProduct, fetchProducts } from "@/lib/api";
+import { Boxes, Layers, PackageOpen, TrendingDown } from "lucide-react";
 
 export default function ProductsPage() {
   const { token } = useAuth();
@@ -63,6 +65,37 @@ export default function ProductsPage() {
   return (
     <AppShell title="Gestión de Productos">
       {message && <p className="text-sm text-slate-500">{message}</p>}
+      <StatsGrid
+        stats={[
+          {
+            label: "Productos activos",
+            value: products.filter((p) => p.disponible).length.toString(),
+            caption: "Listos para vender",
+            icon: Boxes
+          },
+          {
+            label: "Fuera de stock",
+            value: products.filter((p) => p.stockActual <= 0).length.toString(),
+            caption: "Revisar pedidos",
+            icon: PackageOpen,
+            iconClassName: "bg-rose-50 text-rose-500"
+          },
+          {
+            label: "Bajo mínimo",
+            value: products.filter((p) => p.stockActual <= p.stockMinimo).length.toString(),
+            caption: "Necesitan reposición",
+            icon: TrendingDown,
+            iconClassName: "bg-amber-50 text-amber-500"
+          },
+          {
+            label: "Total inventario",
+            value: products.length.toString(),
+            caption: "Registrados en el sistema",
+            icon: Layers,
+            iconClassName: "bg-indigo-50 text-indigo-500"
+          }
+        ]}
+      />
       <ManagementSection
         title="Inventario"
         description="Control de existencias para tienda y ruta."

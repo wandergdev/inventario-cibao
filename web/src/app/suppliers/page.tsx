@@ -5,10 +5,12 @@ import AppShell from "@/components/layout/AppShell";
 import ManagementSection from "@/components/dashboard/ManagementSection";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import StatsGrid from "@/components/dashboard/StatsGrid";
 import { useAuth } from "@/context/AuthContext";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { Supplier } from "@/types";
 import { createSupplier, fetchSuppliers } from "@/lib/api";
+import { Building2, PhoneCall, UserCheck, UserX } from "lucide-react";
 
 export default function SuppliersPage() {
   const { token } = useAuth();
@@ -58,6 +60,37 @@ export default function SuppliersPage() {
   return (
     <AppShell title="Gestión de Suplidores">
       {message && <p className="text-sm text-slate-500">{message}</p>}
+      <StatsGrid
+        stats={[
+          {
+            label: "Suplidores activos",
+            value: suppliers.filter((s) => s.activo).length.toString(),
+            caption: "Disponibles para compras",
+            icon: UserCheck
+          },
+          {
+            label: "Inactivos",
+            value: suppliers.filter((s) => !s.activo).length.toString(),
+            caption: "Pendientes de depurar",
+            icon: UserX,
+            iconClassName: "bg-rose-50 text-rose-500"
+          },
+          {
+            label: "Contactos registrados",
+            value: suppliers.filter((s) => s.contactoVendedor).length.toString(),
+            caption: "Con datos completos",
+            icon: PhoneCall,
+            iconClassName: "bg-amber-50 text-amber-500"
+          },
+          {
+            label: "Total de empresas",
+            value: suppliers.length.toString(),
+            caption: "Sin duplicados",
+            icon: Building2,
+            iconClassName: "bg-indigo-50 text-indigo-500"
+          }
+        ]}
+      />
       <ManagementSection
         title="Suplidores"
         description="Registra empresas y contactos para vincular compras."
