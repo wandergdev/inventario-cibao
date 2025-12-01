@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AppShell from "@/components/layout/AppShell";
+import AdminLayout from "@/components/layout/AdminLayout";
 import ManagementSection from "@/components/dashboard/ManagementSection";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -58,7 +58,7 @@ export default function SuppliersPage() {
   }
 
   return (
-    <AppShell title="Gestión de Suplidores">
+    <AdminLayout active="Suplidores">
       {message && <p className="text-sm text-slate-500">{message}</p>}
       <StatsGrid
         stats={[
@@ -125,6 +125,6 @@ export default function SuppliersPage() {
         ])}
         loading={loading}
       />
-    </AppShell>
+    </AdminLayout>
   );
 }

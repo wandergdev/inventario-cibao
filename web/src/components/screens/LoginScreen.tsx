@@ -11,13 +11,13 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (hydrated && token) {
-      router.replace("/suppliers");
+      router.replace("/dashboard");
     }
   }, [hydrated, token, router]);
 
   const handleLogin = async (email: string, password: string) => {
     await login(email, password);
-    router.replace("/suppliers");
+    router.replace("/dashboard");
   };
 
   return (
