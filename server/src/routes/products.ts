@@ -4,8 +4,8 @@ import { query } from "../db/pool";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 
 const productsRouter = express.Router();
-const adminRoles = ["Encargado de Tienda", "Gerente General"];
-const vendorRoles = ["Vendedor Tienda", "Vendedor Ruta", ...adminRoles];
+const adminRoles = ["Administrador"];
+const vendorRoles = ["Vendedor", ...adminRoles];
 
 const listAllowedRoles = Array.from(new Set(vendorRoles));
 

@@ -5,8 +5,8 @@ import { query } from "../db/pool";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 
 const usersRouter = express.Router();
-const adminRoles = ["Encargado de Tienda", "Gerente General"];
-const managerOnly = ["Gerente General"];
+const adminRoles = ["Administrador"];
+const managerOnly = ["Administrador"];
 
 type CreateUserBody = {
   nombre?: string;

@@ -4,7 +4,7 @@ import { query } from "../db/pool";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 
 const suppliersRouter = express.Router();
-const adminRoles = ["Encargado de Tienda", "Gerente General"];
+const adminRoles = ["Administrador"];
 
 type SupplierRow = {
   id: string;
@@ -58,7 +58,7 @@ const mapSupplier = (row: SupplierRow) => ({
  *               items:
  *                 $ref: "#/components/schemas/Supplier"
  */
-suppliersRouter.get("/", requireAuth(), async (req: AuthenticatedRequest, res: Response) => {
+suppliersRouter.get("/", requireAuth(["Administrador", "Vendedor"]), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { search, active } = req.query ?? {};
     const conditions: string[] = [];
