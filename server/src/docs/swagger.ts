@@ -124,6 +124,60 @@ const options: Options = {
             disponible: { type: "boolean" },
             motivoNoDisponible: { type: "string" }
           }
+        },
+        SalidaDetalle: {
+          type: "object",
+          properties: {
+            producto: { type: "string" },
+            cantidad: { type: "integer" },
+            precioUnitario: { type: "number", format: "float" },
+            subtotal: { type: "number", format: "float" }
+          }
+        },
+        Salida: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            ticket: { type: "string" },
+            fecha_salida: { type: "string", format: "date-time" },
+            fecha_entrega: { type: "string", format: "date-time" },
+            total: { type: "number", format: "float" },
+            estado: { type: "string" },
+            tipo_salida: { type: "string" },
+            vendedor: { type: "string" },
+            detalles: {
+              type: "array",
+              items: { $ref: "#/components/schemas/SalidaDetalle" }
+            }
+          }
+        },
+        SalidaCreateInput: {
+          type: "object",
+          required: ["productos"],
+          properties: {
+            tipoSalida: {
+              type: "string",
+              enum: ["tienda", "ruta"],
+              default: "tienda"
+            },
+            fechaEntrega: { type: "string", format: "date" },
+            estado: {
+              type: "string",
+              enum: ["pendiente", "entregada", "cancelada"]
+            },
+            productos: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["productId", "cantidad"],
+                properties: {
+                  productId: { type: "string", format: "uuid" },
+                  cantidad: { type: "integer" },
+                  precioUnitario: { type: "number", format: "float" }
+                }
+              }
+            }
+          }
         }
       }
     }

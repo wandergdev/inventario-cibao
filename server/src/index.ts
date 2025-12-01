@@ -8,6 +8,7 @@ import { swaggerSpec } from "./docs/swagger";
 import usersRouter from "./routes/users";
 import suppliersRouter from "./routes/suppliers";
 import productsRouter from "./routes/products";
+import salidasRouter from "./routes/salidas";
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use("/auth", authRouter);
 app.use("/users", usersRouter);
 app.use("/suppliers", suppliersRouter);
 app.use("/products", productsRouter);
+app.use("/salidas", salidasRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error", err);
