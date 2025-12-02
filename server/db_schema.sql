@@ -36,10 +36,33 @@ CREATE TABLE IF NOT EXISTS suplidores (
   activo BOOLEAN NOT NULL DEFAULT TRUE
 );
 
+CREATE TABLE IF NOT EXISTS tipos_producto (
+  id_tipo UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre VARCHAR(100) UNIQUE NOT NULL,
+  descripcion TEXT
+);
+
+CREATE TABLE IF NOT EXISTS marcas (
+  id_marca UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre VARCHAR(100) UNIQUE NOT NULL,
+  descripcion TEXT
+);
+
+CREATE TABLE IF NOT EXISTS modelos (
+  id_modelo UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_marca UUID NOT NULL REFERENCES marcas(id_marca),
+  nombre VARCHAR(150) NOT NULL,
+  descripcion TEXT,
+  UNIQUE (id_marca, nombre)
+);
+
 CREATE TABLE IF NOT EXISTS productos (
   id_producto UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nombre VARCHAR(200) NOT NULL,
   descripcion TEXT,
+  id_tipo_producto UUID NOT NULL REFERENCES tipos_producto(id_tipo),
+  id_marca UUID REFERENCES marcas(id_marca),
+  id_modelo UUID REFERENCES modelos(id_modelo),
   precio_tienda NUMERIC(10,2) NOT NULL,
   precio_ruta NUMERIC(10,2) NOT NULL,
   stock_actual INTEGER NOT NULL DEFAULT 0,
@@ -113,3 +136,25 @@ VALUES
   ('Encargado de Tienda', 'Administra inventario y salidas'),
   ('Gerente General', 'Acceso completo al sistema')
 ON CONFLICT (nombre_rol) DO NOTHING;
+
+INSERT INTO tipos_producto (nombre, descripcion)
+VALUES
+  ('Televisor', 'Pantallas LED, LCD, OLED y QLED'),
+  ('Refrigerador', 'Neveras y congeladores'),
+  ('Lavadora', 'Lavadoras automáticas y semiautomáticas'),
+  ('Aire acondicionado', 'Equipos tipo mini split o ventana'),
+  ('Laptop', 'Computadoras portátiles'),
+  ('Equipo de sonido', 'Bocinas y sistemas de audio')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO marcas (nombre, descripcion)
+VALUES
+  ('Samsung', 'Electrodomésticos y electrónica'),
+  ('LG', 'Electrónica y electrodomésticos'),
+  ('Whirlpool', 'Línea blanca'),
+  ('Midea', 'Aire acondicionado y hogar'),
+  ('Lenovo', 'Computadoras y dispositivos'),
+  ('JBL', 'Audio profesional')
+ON CONFLICT (nombre) DO NOTHING;
+
+-- Modelos iniciales están fuera de alcance; se insertarán al crear productos.

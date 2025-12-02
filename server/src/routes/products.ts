@@ -13,6 +13,12 @@ const baseSelect = `
   SELECT p.id_producto AS id,
          p.nombre,
          p.descripcion,
+         p.id_tipo_producto,
+         t.nombre AS tipo_nombre,
+         p.id_marca,
+         m.nombre AS marca_nombre,
+         p.id_modelo,
+         mo.nombre AS modelo_nombre,
          p.precio_tienda,
          p.precio_ruta,
          p.stock_actual,
@@ -22,6 +28,9 @@ const baseSelect = `
          p.id_suplidor,
          s.nombre_empresa AS suplidor
   FROM productos p
+  LEFT JOIN tipos_producto t ON t.id_tipo = p.id_tipo_producto
+  LEFT JOIN marcas m ON m.id_marca = p.id_marca
+  LEFT JOIN modelos mo ON mo.id_modelo = p.id_modelo
   LEFT JOIN suplidores s ON s.id_suplidor = p.id_suplidor
 `;
 
@@ -29,6 +38,12 @@ const mapProduct = (row: any) => ({
   id: row.id,
   nombre: row.nombre,
   descripcion: row.descripcion,
+  tipoId: row.id_tipo_producto,
+  tipoNombre: row.tipo_nombre,
+  marcaId: row.id_marca,
+  marcaNombre: row.marca_nombre,
+  modeloId: row.id_modelo,
+  modeloNombre: row.modelo_nombre,
   precioTienda: row.precio_tienda,
   precioRuta: row.precio_ruta,
   stockActual: row.stock_actual,
@@ -126,11 +141,58 @@ productsRouter.get("/", requireAuth(listAllowedRoles), async (req: Authenticated
  */
 productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { nombre, descripcion, precioTienda, precioRuta, stockActual = 0, stockMinimo = 0, suplidorId, disponible = true, motivoNoDisponible } =
-      req.body ?? {};
+    const {
+      nombre,
+      descripcion,
+      tipoId,
+      marcaId,
+      modeloId,
+      modeloNombre,
+      precioTienda,
+      precioRuta,
+      stockActual = 0,
+      stockMinimo = 0,
+      suplidorId,
+      disponible = true,
+      motivoNoDisponible
+    } = req.body ?? {};
 
-    if (!nombre || precioTienda === undefined || precioRuta === undefined) {
-      return res.status(400).json({ message: "Nombre y precios son obligatorios" });
+    if (!nombre || !tipoId || !marcaId) {
+      return res.status(400).json({ message: "Nombre, tipo y marca son obligatorios" });
+    }
+
+    if (!modeloId && !modeloNombre) {
+      return res.status(400).json({ message: "Debes seleccionar un modelo o escribir uno nuevo" });
+    }
+
+    if (precioTienda === undefined || precioRuta === undefined) {
+      return res.status(400).json({ message: "Debes indicar los precios de tienda y ruta" });
+    }
+
+    const { rowCount: typeExists } = await query(`SELECT 1 FROM tipos_producto WHERE id_tipo = $1`, [tipoId]);
+    if (!typeExists) {
+      return res.status(400).json({ message: "Tipo de producto no válido" });
+    }
+
+    const { rowCount: brandExists } = await query(`SELECT 1 FROM marcas WHERE id_marca = $1`, [marcaId]);
+    if (!brandExists) {
+      return res.status(400).json({ message: "Marca no válida" });
+    }
+
+    let finalModeloId = modeloId;
+    if (!finalModeloId && modeloNombre) {
+      const { rows: modeloRows } = await query(
+        `INSERT INTO modelos (id_marca, nombre)
+         VALUES ($1, $2)
+         ON CONFLICT (id_marca, nombre) DO UPDATE SET nombre = EXCLUDED.nombre
+         RETURNING id_modelo`,
+        [marcaId, modeloNombre.trim()]
+      );
+      finalModeloId = modeloRows[0].id_modelo;
+    }
+
+    if (!finalModeloId) {
+      return res.status(400).json({ message: "No se pudo determinar el modelo" });
     }
 
     if (suplidorId) {
@@ -141,10 +203,23 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
     }
 
     const { rows } = await query(
-      `INSERT INTO productos (nombre, descripcion, precio_tienda, precio_ruta, stock_actual, stock_minimo, id_suplidor, disponible, motivo_no_disponible)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO productos (nombre, descripcion, id_tipo_producto, id_marca, id_modelo, precio_tienda, precio_ruta, stock_actual, stock_minimo, id_suplidor, disponible, motivo_no_disponible)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [nombre, descripcion, precioTienda, precioRuta, stockActual, stockMinimo, suplidorId ?? null, disponible, motivoNoDisponible]
+      [
+        nombre,
+        descripcion,
+        tipoId,
+        marcaId,
+        finalModeloId,
+        precioTienda,
+        precioRuta,
+        stockActual,
+        stockMinimo,
+        suplidorId ?? null,
+        disponible,
+        motivoNoDisponible
+      ]
     );
 
     res.status(201).json(mapProduct(rows[0]));
@@ -216,6 +291,44 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
       }
       updates.push(`id_suplidor = $${updates.length + 1}`);
       params.push(body.suplidorId ?? null);
+    }
+
+    if (body.tipoId !== undefined) {
+      if (body.tipoId) {
+        const { rowCount } = await query(`SELECT 1 FROM tipos_producto WHERE id_tipo = $1`, [body.tipoId]);
+        if (!rowCount) {
+          return res.status(400).json({ message: "Tipo de producto no válido" });
+        }
+      }
+      updates.push(`id_tipo_producto = $${updates.length + 1}`);
+      params.push(body.tipoId ?? null);
+    }
+
+    if (body.marcaId !== undefined) {
+      if (body.marcaId) {
+        const { rowCount } = await query(`SELECT 1 FROM marcas WHERE id_marca = $1`, [body.marcaId]);
+        if (!rowCount) {
+          return res.status(400).json({ message: "Marca no válida" });
+        }
+      }
+      updates.push(`id_marca = $${updates.length + 1}`);
+      params.push(body.marcaId ?? null);
+    }
+
+    if (body.modeloId !== undefined || body.modeloNombre) {
+      let modeloRef = body.modeloId;
+      if (!modeloRef && body.modeloNombre && body.marcaId) {
+        const { rows: modeloRows } = await query(
+          `INSERT INTO modelos (id_marca, nombre)
+           VALUES ($1, $2)
+           ON CONFLICT (id_marca, nombre) DO UPDATE SET nombre = EXCLUDED.nombre
+           RETURNING id_modelo`,
+          [body.marcaId, body.modeloNombre.trim()]
+        );
+        modeloRef = modeloRows[0].id_modelo;
+      }
+      updates.push(`id_modelo = $${updates.length + 1}`);
+      params.push(modeloRef ?? null);
     }
 
     if (!updates.length) {

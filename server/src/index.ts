@@ -11,6 +11,9 @@ import productsRouter from "./routes/products";
 import salidasRouter from "./routes/salidas";
 import pedidosRouter from "./routes/pedidos";
 import movimientosRouter from "./routes/movimientos";
+import productTypesRouter from "./routes/productTypes";
+import brandsRouter from "./routes/brands";
+import modelsRouter from "./routes/models";
 
 const app = express();
 
@@ -26,6 +29,9 @@ app.use("/auth", authRouter);
 app.use("/users", usersRouter);
 app.use("/suppliers", suppliersRouter);
 app.use("/products", productsRouter);
+app.use("/product-types", productTypesRouter);
+app.use("/brands", brandsRouter);
+app.use("/models", modelsRouter);
 app.use("/salidas", salidasRouter);
 app.use("/pedidos", pedidosRouter);
 app.use("/movimientos", movimientosRouter);
