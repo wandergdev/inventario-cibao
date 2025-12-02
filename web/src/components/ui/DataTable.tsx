@@ -1,10 +1,12 @@
+import type { ReactNode } from "react";
+
 export default function DataTable({
   headers,
   rows,
   loading
 }: {
   headers: string[];
-  rows: string[][];
+  rows: Array<Array<string | ReactNode>>;
   loading?: boolean;
 }) {
   if (loading) {
@@ -28,10 +30,10 @@ export default function DataTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((cells, index) => (
-            <tr key={`${cells[0]}-${index}`} className="border-t border-slate-100">
+          {rows.map((cells, rowIndex) => (
+            <tr key={rowIndex} className="border-t border-slate-100">
               {cells.map((cell, cellIndex) => (
-                <td key={`${cell}-${cellIndex}`} className="px-4 py-2 text-slate-700">
+                <td key={`${rowIndex}-${cellIndex}`} className="px-4 py-2 text-slate-700">
                   {cell}
                 </td>
               ))}

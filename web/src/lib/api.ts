@@ -1,4 +1,15 @@
-import { ApiError, LoginResponse, Movimiento, Pedido, Product, Supplier, Salida } from "@/types";
+import {
+  ApiError,
+  LoginResponse,
+  Movimiento,
+  Pedido,
+  Product,
+  ProductType,
+  Supplier,
+  Salida,
+  Brand,
+  Model
+} from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -35,20 +46,61 @@ export async function createSupplier(token: string, payload: Partial<Supplier>) 
   });
 }
 
+export async function updateSupplier(token: string, id: string, payload: Partial<Supplier>) {
+  return apiFetch<Supplier>(`/suppliers/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function fetchProducts(token: string) {
   return apiFetch<Product[]>("/products", {
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }
 
+export async function fetchProductTypes(token: string) {
+  return apiFetch<ProductType[]>("/product-types", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchBrands(token: string) {
+  return apiFetch<Brand[]>("/brands", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchModels(token: string, brandId?: string) {
+  const params = brandId ? `?brandId=${brandId}` : "";
+  return apiFetch<Model[]>(`/models${params}`, {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
 export async function createProduct(
   token: string,
-  payload: { nombre: string; stockActual: number; stockMinimo: number; disponible: boolean }
+  payload: {
+    nombre: string;
+    descripcion?: string;
+    tipoId: string;
+    marcaId: string;
+    modeloId?: string;
+    modeloNombre?: string;
+    precioTienda: number;
+    precioRuta: number;
+    stockActual: number;
+    stockMinimo: number;
+    suplidorId?: string;
+    disponible: boolean;
+    motivoNoDisponible?: string;
+  }
 ) {
   return apiFetch<Product>("/products", {
     method: "POST",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ ...payload, precioTienda: 1, precioRuta: 1 })
+    body: JSON.stringify(payload)
   });
 }
 

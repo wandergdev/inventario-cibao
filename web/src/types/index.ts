@@ -22,11 +22,39 @@ export type Product = {
   id: string;
   nombre: string;
   descripcion?: string;
+  tipoId?: string | null;
+  tipoNombre?: string | null;
+  marcaId?: string | null;
+  marcaNombre?: string | null;
+  modeloId?: string | null;
+  modeloNombre?: string | null;
+  precioTienda: number;
+  precioRuta: number;
   stockActual: number;
   stockMinimo: number;
   disponible: boolean;
   motivoNoDisponible?: string;
-  suplidor?: string;
+  suplidorId?: string | null;
+  suplidor?: string | null;
+};
+
+export type ProductType = {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+};
+
+export type Brand = {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+};
+
+export type Model = {
+  id: string;
+  brandId: string;
+  nombre: string;
+  descripcion?: string | null;
 };
 
 export type ApiError = {

@@ -10,6 +10,13 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import DataTable from "@/components/ui/DataTable";
 
+const formatProductLabel = (product: Product) => {
+  const brandModel =
+    product.marca && product.modelo ? `${product.marca} ${product.modelo}` : product.marca ?? product.modelo ?? "";
+  const typePart = product.tipoNombre ? `${product.tipoNombre} - ` : "";
+  return `${typePart}${product.nombre}${brandModel ? ` (${brandModel.trim()})` : ""}`;
+};
+
 export default function SalidasPage() {
   const { hydrated } = useRequireAuth();
   const { token, role } = useAuth();
@@ -118,7 +125,7 @@ export default function SalidasPage() {
                 <option value="">Selecciona producto</option>
                 {products.map((product) => (
                   <option key={product.id} value={product.id}>
-                    {product.nombre}
+                    {formatProductLabel(product)}
                   </option>
                 ))}
               </select>
