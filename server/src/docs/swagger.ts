@@ -88,6 +88,14 @@ const options: Options = {
             descripcion: { type: "string" }
           }
         },
+        ProductTypeInput: {
+          type: "object",
+          required: ["nombre"],
+          properties: {
+            nombre: { type: "string" },
+            descripcion: { type: "string" }
+          }
+        },
         Brand: {
           type: "object",
           properties: {
@@ -96,10 +104,28 @@ const options: Options = {
             descripcion: { type: "string" }
           }
         },
+        BrandInput: {
+          type: "object",
+          required: ["nombre"],
+          properties: {
+            nombre: { type: "string" },
+            descripcion: { type: "string" }
+          }
+        },
         Model: {
           type: "object",
           properties: {
             id: { type: "string", format: "uuid" },
+            brandId: { type: "string", format: "uuid" },
+            brandName: { type: "string" },
+            nombre: { type: "string" },
+            descripcion: { type: "string" }
+          }
+        },
+        ModelInput: {
+          type: "object",
+          required: ["brandId", "nombre"],
+          properties: {
             brandId: { type: "string", format: "uuid" },
             nombre: { type: "string" },
             descripcion: { type: "string" }
@@ -129,13 +155,14 @@ const options: Options = {
         },
         ProductCreateInput: {
           type: "object",
-          required: ["nombre", "tipoProducto", "marca", "modelo", "precioTienda", "precioRuta"],
+          required: ["nombre", "tipoId", "marcaId", "precioTienda", "precioRuta"],
           properties: {
             nombre: { type: "string" },
             descripcion: { type: "string" },
             tipoId: { type: "string", format: "uuid" },
-            marca: { type: "string" },
-            modelo: { type: "string" },
+            marcaId: { type: "string", format: "uuid" },
+            modeloId: { type: "string", format: "uuid" },
+            modeloNombre: { type: "string" },
             precioTienda: { type: "number", format: "float" },
             precioRuta: { type: "number", format: "float" },
             stockActual: { type: "integer" },
@@ -151,8 +178,9 @@ const options: Options = {
             nombre: { type: "string" },
             descripcion: { type: "string" },
             tipoId: { type: "string", format: "uuid" },
-            marca: { type: "string" },
-            modelo: { type: "string" },
+            marcaId: { type: "string", format: "uuid" },
+            modeloId: { type: "string", format: "uuid" },
+            modeloNombre: { type: "string" },
             precioTienda: { type: "number", format: "float" },
             precioRuta: { type: "number", format: "float" },
             stockActual: { type: "integer" },
