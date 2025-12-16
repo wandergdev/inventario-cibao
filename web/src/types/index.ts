@@ -53,6 +53,7 @@ export type Brand = {
 export type Model = {
   id: string;
   brandId: string;
+  brandName?: string | null;
   nombre: string;
   descripcion?: string | null;
 };

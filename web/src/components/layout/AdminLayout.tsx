@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentType } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { useAuth } from "@/context/AuthContext";
@@ -14,19 +15,42 @@ import {
   PackageCheck,
   Settings,
   UsersRound,
-  Truck
+  Truck,
+  Tags,
+  BadgeHelp,
+  Layers,
+  ChevronDown
 } from "lucide-react";
 
 type NavItem = {
   label: string;
-  href: string;
-  icon: ComponentType<{ size?: number }>;
+  href?: string;
+  icon?: ComponentType<{ size?: number }>;
   roles?: string[];
+  children?: Array<{
+    label: string;
+    href: string;
+    roles?: string[];
+    icon?: ComponentType<{ size?: number }>;
+  }>;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Productos", href: "/products", icon: PackageCheck },
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard
+  },
+  {
+    label: "Productos",
+    href: "/products",
+    icon: PackageCheck,
+    children: [
+      { label: "Tipos de producto", href: "/catalog/product-types", roles: ["Administrador"], icon: Layers },
+      { label: "Marcas", href: "/catalog/brands", roles: ["Administrador"], icon: Tags },
+      { label: "Modelos", href: "/catalog/models", roles: ["Administrador"], icon: BadgeHelp }
+    ]
+  },
   { label: "Salidas", href: "/salidas", icon: Truck },
   { label: "Pedidos", href: "/pedidos", icon: ClipboardCheck },
   { label: "Inventario", href: "#", icon: Boxes },
@@ -45,6 +69,21 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const { userName, role, logout } = useAuth();
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
+
+  const toggleMenu = useCallback((label: string) => {
+    setOpenMenus((prev) => ({ ...prev, [label]: !prev[label] }));
+  }, []);
+
+  const defaultOpen = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    NAV_ITEMS.forEach((item) => {
+      if (item.children && item.children.some((child) => child.label === active)) {
+        map[item.label] = true;
+      }
+    });
+    return map;
+  }, [active]);
 
   return (
     <div className="flex min-h-screen bg-slate-100">
@@ -54,21 +93,72 @@ export default function AdminLayout({
           <h2 className="text-xl font-semibold">Electro Cibao</h2>
         </div>
         <nav className="space-y-1 p-4">
-          {NAV_ITEMS.filter((item) => !item.roles || (role && item.roles.includes(role))).map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={clsx(
-                "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition",
-                active === item.label
-                  ? "bg-white/10 text-white"
-                  : "text-slate-300 hover:bg-white/5"
-              )}
-            >
-              <item.icon size={18} />
-              {item.label}
-            </Link>
-          ))}
+          {NAV_ITEMS.filter((item) => !item.roles || (role && item.roles.includes(role))).map((item) => {
+            const allowedChildren = item.children
+              ? item.children.filter((child) => !child.roles || (role && child.roles.includes(role)))
+              : [];
+            const isParentActive =
+              active === item.label || allowedChildren.some((child) => child.label === active);
+            const isOpen = openMenus[item.label] ?? defaultOpen[item.label] ?? isParentActive;
+
+            return (
+              <div key={item.label}>
+                {allowedChildren.length > 0 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => toggleMenu(item.label)}
+                      className={clsx(
+                        "flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition",
+                        isParentActive ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5"
+                      )}
+                    >
+                      {item.icon && <item.icon size={18} />}
+                      <span className="flex-1">{item.label}</span>
+                      <ChevronDown
+                        size={16}
+                        className={clsx("transition-transform", isOpen ? "rotate-180" : "rotate-0")}
+                      />
+                    </button>
+                    {isOpen && (
+                      <div className="ml-6 mt-1 space-y-1">
+                        {allowedChildren.map((child) => (
+                          <Link
+                            key={child.label}
+                            href={child.href}
+                            className={clsx(
+                              "flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold uppercase tracking-wide transition",
+                              active === child.label
+                                ? "bg-white/10 text-white"
+                                : "text-slate-400 hover:bg-white/5"
+                            )}
+                          >
+                            {child.icon && <child.icon size={14} />}
+                            {child.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : item.href ? (
+                  <Link
+                    href={item.href}
+                    className={clsx(
+                      "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition",
+                      isParentActive ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5"
+                    )}
+                  >
+                    {item.icon && <item.icon size={18} />}
+                    {item.label}
+                  </Link>
+                ) : (
+                  <div className="px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                    {item.label}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
       </aside>
       <main className="flex-1 p-8">

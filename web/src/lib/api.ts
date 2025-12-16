@@ -21,7 +21,17 @@ async function apiFetch<T>(path: string, init: RequestInit = {}) {
     const error = (await response.json().catch(() => ({}))) as ApiError;
     throw new Error(error.message ?? `Request failed (${response.status})`);
   }
-  return (await response.json()) as T;
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 export async function login(email: string, password: string) {
@@ -66,8 +76,58 @@ export async function fetchProductTypes(token: string) {
   });
 }
 
+export async function createProductType(token: string, payload: { nombre: string; descripcion?: string }) {
+  return apiFetch<ProductType>("/product-types", {
+    method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateProductType(
+  token: string,
+  id: string,
+  payload: { nombre?: string; descripcion?: string | null }
+) {
+  return apiFetch<ProductType>(`/product-types/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteProductType(token: string, id: string) {
+  return apiFetch<void>(`/product-types/${id}`, {
+    method: "DELETE",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
 export async function fetchBrands(token: string) {
   return apiFetch<Brand[]>("/brands", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function createBrand(token: string, payload: { nombre: string; descripcion?: string }) {
+  return apiFetch<Brand>("/brands", {
+    method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateBrand(token: string, id: string, payload: { nombre?: string; descripcion?: string | null }) {
+  return apiFetch<Brand>(`/brands/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteBrand(token: string, id: string) {
+  return apiFetch<void>(`/brands/${id}`, {
+    method: "DELETE",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }
@@ -75,6 +135,36 @@ export async function fetchBrands(token: string) {
 export async function fetchModels(token: string, brandId?: string) {
   const params = brandId ? `?brandId=${brandId}` : "";
   return apiFetch<Model[]>(`/models${params}`, {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function createModel(
+  token: string,
+  payload: { brandId: string; nombre: string; descripcion?: string | null }
+) {
+  return apiFetch<Model>("/models", {
+    method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateModel(
+  token: string,
+  id: string,
+  payload: { brandId?: string; nombre?: string; descripcion?: string | null }
+) {
+  return apiFetch<Model>(`/models/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteModel(token: string, id: string) {
+  return apiFetch<void>(`/models/${id}`, {
+    method: "DELETE",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }
