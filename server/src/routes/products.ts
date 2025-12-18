@@ -182,17 +182,30 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
     let finalModeloId = modeloId;
     if (!finalModeloId && modeloNombre) {
       const { rows: modeloRows } = await query(
-        `INSERT INTO modelos (id_marca, nombre)
-         VALUES ($1, $2)
-         ON CONFLICT (id_marca, nombre) DO UPDATE SET nombre = EXCLUDED.nombre
-         RETURNING id_modelo`,
-        [marcaId, modeloNombre.trim()]
+        `INSERT INTO modelos (id_marca, id_tipo_producto, nombre)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (id_marca, id_tipo_producto, nombre) DO UPDATE SET nombre = EXCLUDED.nombre
+         RETURNING id_modelo, id_marca, id_tipo_producto`,
+        [marcaId, tipoId, modeloNombre.trim()]
       );
       finalModeloId = modeloRows[0].id_modelo;
     }
 
     if (!finalModeloId) {
       return res.status(400).json({ message: "No se pudo determinar el modelo" });
+    }
+
+    const { rows: modeloInfo } = await query(
+      `SELECT id_marca, id_tipo_producto FROM modelos WHERE id_modelo = $1`,
+      [finalModeloId]
+    );
+
+    if (!modeloInfo.length) {
+      return res.status(400).json({ message: "Modelo no válido" });
+    }
+
+    if (modeloInfo[0].id_marca !== marcaId || modeloInfo[0].id_tipo_producto !== tipoId) {
+      return res.status(400).json({ message: "El modelo no coincide con la marca y el tipo seleccionados" });
     }
 
     if (suplidorId) {
@@ -262,8 +275,20 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
     }
 
     const body = req.body ?? {};
+    const { rows: currentRows } = await query(`SELECT * FROM productos WHERE id_producto = $1`, [id]);
+    if (!currentRows.length) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    const current = currentRows[0];
     const updates: string[] = [];
     const params: Array<any> = [];
+
+    const setField = (column: string, value: any) => {
+      updates.push(`${column} = $${updates.length + 1}`);
+      params.push(value);
+    };
+
     const mapFields: Record<string, string> = {
       nombre: "nombre",
       descripcion: "descripcion",
@@ -277,10 +302,14 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
 
     Object.entries(mapFields).forEach(([key, column]) => {
       if (body[key] !== undefined) {
-        updates.push(`${column} = $${updates.length + 1}`);
-        params.push(body[key]);
+        setField(column, body[key]);
       }
     });
+
+    let targetTipoId = body.tipoId ?? current.id_tipo_producto;
+    let targetMarcaId = body.marcaId ?? current.id_marca;
+    let finalModeloId = current.id_modelo;
+    let modeloChanged = false;
 
     if (body.suplidorId !== undefined) {
       if (body.suplidorId) {
@@ -289,46 +318,75 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
           return res.status(400).json({ message: "Suplidor no existe" });
         }
       }
-      updates.push(`id_suplidor = $${updates.length + 1}`);
-      params.push(body.suplidorId ?? null);
+      setField("id_suplidor", body.suplidorId ?? null);
     }
 
     if (body.tipoId !== undefined) {
-      if (body.tipoId) {
-        const { rowCount } = await query(`SELECT 1 FROM tipos_producto WHERE id_tipo = $1`, [body.tipoId]);
-        if (!rowCount) {
-          return res.status(400).json({ message: "Tipo de producto no válido" });
-        }
+      if (!body.tipoId) {
+        return res.status(400).json({ message: "Tipo de producto no válido" });
       }
-      updates.push(`id_tipo_producto = $${updates.length + 1}`);
-      params.push(body.tipoId ?? null);
+      const { rowCount } = await query(`SELECT 1 FROM tipos_producto WHERE id_tipo = $1`, [body.tipoId]);
+      if (!rowCount) {
+        return res.status(400).json({ message: "Tipo de producto no válido" });
+      }
+      targetTipoId = body.tipoId;
+      setField("id_tipo_producto", targetTipoId);
     }
 
     if (body.marcaId !== undefined) {
-      if (body.marcaId) {
-        const { rowCount } = await query(`SELECT 1 FROM marcas WHERE id_marca = $1`, [body.marcaId]);
-        if (!rowCount) {
-          return res.status(400).json({ message: "Marca no válida" });
-        }
+      if (!body.marcaId) {
+        return res.status(400).json({ message: "Marca no válida" });
       }
-      updates.push(`id_marca = $${updates.length + 1}`);
-      params.push(body.marcaId ?? null);
+      const { rowCount } = await query(`SELECT 1 FROM marcas WHERE id_marca = $1`, [body.marcaId]);
+      if (!rowCount) {
+        return res.status(400).json({ message: "Marca no válida" });
+      }
+      targetMarcaId = body.marcaId;
+      setField("id_marca", targetMarcaId);
     }
 
     if (body.modeloId !== undefined || body.modeloNombre) {
-      let modeloRef = body.modeloId;
-      if (!modeloRef && body.modeloNombre && body.marcaId) {
-        const { rows: modeloRows } = await query(
-          `INSERT INTO modelos (id_marca, nombre)
-           VALUES ($1, $2)
-           ON CONFLICT (id_marca, nombre) DO UPDATE SET nombre = EXCLUDED.nombre
-           RETURNING id_modelo`,
-          [body.marcaId, body.modeloNombre.trim()]
-        );
-        modeloRef = modeloRows[0].id_modelo;
+      if (body.modeloId !== undefined) {
+        finalModeloId = body.modeloId ?? null;
+        modeloChanged = true;
       }
-      updates.push(`id_modelo = $${updates.length + 1}`);
-      params.push(modeloRef ?? null);
+      if (!body.modeloId && body.modeloNombre) {
+        if (!targetMarcaId || !targetTipoId) {
+          return res.status(400).json({ message: "Debes definir tipo y marca antes de crear el modelo" });
+        }
+        const trimmedName = body.modeloNombre.trim();
+        if (!trimmedName) {
+          return res.status(400).json({ message: "Nombre de modelo no válido" });
+        }
+        const { rows: modeloRows } = await query(
+          `INSERT INTO modelos (id_marca, id_tipo_producto, nombre)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (id_marca, id_tipo_producto, nombre) DO UPDATE SET nombre = EXCLUDED.nombre
+           RETURNING id_modelo`,
+          [targetMarcaId, targetTipoId, trimmedName]
+        );
+        finalModeloId = modeloRows[0].id_modelo;
+        modeloChanged = true;
+      }
+    }
+
+    if (finalModeloId) {
+      const { rows: modeloRows } = await query(
+        `SELECT id_marca, id_tipo_producto FROM modelos WHERE id_modelo = $1`,
+        [finalModeloId]
+      );
+      if (!modeloRows.length) {
+        return res.status(400).json({ message: "Modelo no válido" });
+      }
+      if (modeloRows[0].id_marca !== targetMarcaId || modeloRows[0].id_tipo_producto !== targetTipoId) {
+        return res.status(400).json({ message: "El modelo no coincide con la marca y el tipo seleccionados" });
+      }
+    }
+
+    if (modeloChanged) {
+      setField("id_modelo", finalModeloId ?? null);
+    } else if ((body.tipoId !== undefined || body.marcaId !== undefined) && finalModeloId) {
+      // modelo sigue siendo válido gracias a la verificación anterior, no es necesario actualizar la columna
     }
 
     if (!updates.length) {
@@ -337,11 +395,10 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
 
     params.push(id);
 
-    const { rows } = await query(`UPDATE productos SET ${updates.join(", ")} WHERE id_producto = $${params.length} RETURNING *`, params);
-
-    if (!rows.length) {
-      return res.status(404).json({ message: "Producto no encontrado" });
-    }
+    const { rows } = await query(
+      `UPDATE productos SET ${updates.join(", ")} WHERE id_producto = $${params.length} RETURNING *`,
+      params
+    );
 
     res.json(mapProduct(rows[0]));
   } catch (error) {

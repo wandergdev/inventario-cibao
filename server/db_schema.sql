@@ -51,9 +51,10 @@ CREATE TABLE IF NOT EXISTS marcas (
 CREATE TABLE IF NOT EXISTS modelos (
   id_modelo UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   id_marca UUID NOT NULL REFERENCES marcas(id_marca),
+  id_tipo_producto UUID NOT NULL REFERENCES tipos_producto(id_tipo),
   nombre VARCHAR(150) NOT NULL,
   descripcion TEXT,
-  UNIQUE (id_marca, nombre)
+  UNIQUE (id_marca, id_tipo_producto, nombre)
 );
 
 CREATE TABLE IF NOT EXISTS productos (

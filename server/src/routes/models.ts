@@ -10,16 +10,21 @@ const selectBase = `
   SELECT mo.id_modelo AS id,
          mo.id_marca AS "brandId",
          ma.nombre AS "brandName",
+         mo.id_tipo_producto AS "typeId",
+         tp.nombre AS "typeName",
          mo.nombre,
          mo.descripcion
   FROM modelos mo
   JOIN marcas ma ON ma.id_marca = mo.id_marca
+  JOIN tipos_producto tp ON tp.id_tipo = mo.id_tipo_producto
 `;
 
 const mapModel = (row: any) => ({
   id: row.id,
   brandId: row.brandId,
   brandName: row.brandName,
+  typeId: row.typeId,
+  typeName: row.typeName,
   nombre: row.nombre,
   descripcion: row.descripcion
 });
@@ -39,6 +44,11 @@ const mapModel = (row: any) => ({
  *         schema:
  *           type: string
  *         description: Filtrar modelos por marca
+ *       - in: query
+ *         name: typeId
+ *         schema:
+ *           type: string
+ *         description: Filtrar modelos por tipo de producto
  *     responses:
  *       200:
  *         description: Listado de modelos
@@ -52,13 +62,21 @@ const mapModel = (row: any) => ({
 modelsRouter.get("/", requireAuth(), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const brandId = req.query?.brandId as string | undefined;
+    const typeId = req.query?.typeId as string | undefined;
     const params: string[] = [];
-    let whereClause = "";
+    const conditions: string[] = [];
 
     if (brandId) {
-      whereClause = "WHERE mo.id_marca = $1";
+      conditions.push(`mo.id_marca = $${conditions.length + 1}`);
       params.push(brandId as string);
     }
+
+    if (typeId) {
+      conditions.push(`mo.id_tipo_producto = $${conditions.length + 1}`);
+      params.push(typeId as string);
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const { rows } = await query(`${selectBase} ${whereClause} ORDER BY mo.nombre ASC`, params);
     res.json(rows.map(mapModel));
@@ -89,9 +107,13 @@ modelsRouter.get("/", requireAuth(), async (req: AuthenticatedRequest, res: Resp
  */
 modelsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { brandId, nombre, descripcion } = req.body ?? {};
+    const { brandId, typeId, nombre, descripcion } = req.body ?? {};
     if (!brandId) {
       return res.status(400).json({ message: "La marca es requerida" });
+    }
+
+    if (!typeId) {
+      return res.status(400).json({ message: "El tipo de producto es requerido" });
     }
 
     const cleanName = typeof nombre === "string" ? nombre.trim() : "";
@@ -104,18 +126,27 @@ modelsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedRequest
       return res.status(400).json({ message: "Marca no existente" });
     }
 
+    const typeResult = await query(`SELECT nombre FROM tipos_producto WHERE id_tipo = $1`, [typeId]);
+    if (!typeResult.rowCount) {
+      return res.status(400).json({ message: "Tipo de producto no existente" });
+    }
+
     const cleanDescription = typeof descripcion === "string" ? descripcion.trim() : null;
     const { rows } = await query(
-      `INSERT INTO modelos (id_marca, nombre, descripcion)
-       VALUES ($1, $2, $3)
-       RETURNING id_modelo AS id, id_marca AS "brandId", nombre, descripcion`,
-      [brandId, cleanName, cleanDescription]
+      `INSERT INTO modelos (id_marca, id_tipo_producto, nombre, descripcion)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id_modelo AS id, id_marca AS "brandId", id_tipo_producto AS "typeId", nombre, descripcion`,
+      [brandId, typeId, cleanName, cleanDescription]
     );
 
-    res.status(201).json({ ...rows[0], brandName: brandResult.rows[0].nombre });
+    res.status(201).json({
+      ...rows[0],
+      brandName: brandResult.rows[0].nombre,
+      typeName: typeResult.rows[0].nombre
+    });
   } catch (error: any) {
     if (error?.code === "23505") {
-      return res.status(409).json({ message: "Ya existe un modelo con ese nombre para esta marca" });
+      return res.status(409).json({ message: "Ya existe un modelo con ese nombre para esta marca y tipo" });
     }
     console.error("Error creando modelo", error);
     res.status(500).json({ message: "Error interno" });
@@ -154,10 +185,11 @@ modelsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedReq
       return res.status(400).json({ message: "ID requerido" });
     }
 
-    const { brandId, nombre, descripcion } = req.body ?? {};
+    const { brandId, typeId, nombre, descripcion } = req.body ?? {};
     const updates: string[] = [];
     const params: Array<string | null> = [];
     let brandName: string | undefined;
+    let typeName: string | undefined;
 
     if (brandId !== undefined) {
       if (!brandId) {
@@ -170,6 +202,19 @@ modelsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedReq
       brandName = brandResult.rows[0].nombre;
       updates.push(`id_marca = $${updates.length + 1}`);
       params.push(brandId);
+    }
+
+    if (typeId !== undefined) {
+      if (!typeId) {
+        return res.status(400).json({ message: "El tipo de producto es requerido" });
+      }
+      const typeResult = await query(`SELECT nombre FROM tipos_producto WHERE id_tipo = $1`, [typeId]);
+      if (!typeResult.rowCount) {
+        return res.status(400).json({ message: "Tipo de producto no existente" });
+      }
+      typeName = typeResult.rows[0].nombre;
+      updates.push(`id_tipo_producto = $${updates.length + 1}`);
+      params.push(typeId);
     }
 
     if (nombre !== undefined) {
@@ -194,7 +239,7 @@ modelsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedReq
     params.push(id);
     const { rows } = await query(
       `UPDATE modelos SET ${updates.join(", ")} WHERE id_modelo = $${params.length}
-       RETURNING id_modelo AS id, id_marca AS "brandId", nombre, descripcion`,
+       RETURNING id_modelo AS id, id_marca AS "brandId", id_tipo_producto AS "typeId", nombre, descripcion`,
       params
     );
 
@@ -207,10 +252,15 @@ modelsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedReq
       brandName = brandResult.rows[0]?.nombre;
     }
 
-    res.json({ ...rows[0], brandName });
+    if (!typeName) {
+      const typeResult = await query(`SELECT nombre FROM tipos_producto WHERE id_tipo = $1`, [rows[0].typeId]);
+      typeName = typeResult.rows[0]?.nombre;
+    }
+
+    res.json({ ...rows[0], brandName, typeName });
   } catch (error: any) {
     if (error?.code === "23505") {
-      return res.status(409).json({ message: "Ya existe un modelo con ese nombre para esta marca" });
+      return res.status(409).json({ message: "Ya existe un modelo con ese nombre para esta marca y tipo" });
     }
     console.error("Error actualizando modelo", error);
     res.status(500).json({ message: "Error interno" });

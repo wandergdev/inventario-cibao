@@ -118,15 +118,18 @@ const options: Options = {
             id: { type: "string", format: "uuid" },
             brandId: { type: "string", format: "uuid" },
             brandName: { type: "string" },
+            typeId: { type: "string", format: "uuid" },
+            typeName: { type: "string" },
             nombre: { type: "string" },
             descripcion: { type: "string" }
           }
         },
         ModelInput: {
           type: "object",
-          required: ["brandId", "nombre"],
+          required: ["brandId", "typeId", "nombre"],
           properties: {
             brandId: { type: "string", format: "uuid" },
+            typeId: { type: "string", format: "uuid" },
             nombre: { type: "string" },
             descripcion: { type: "string" }
           }
