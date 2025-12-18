@@ -105,22 +105,31 @@ export default function AdminLayout({
               <div key={item.label}>
                 {allowedChildren.length > 0 ? (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => toggleMenu(item.label)}
+                    <div
                       className={clsx(
-                        "flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition",
+                        "flex items-center gap-1 rounded-2xl px-2 py-2 transition",
                         isParentActive ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5"
                       )}
                     >
-                      {item.icon && <item.icon size={18} />}
-                      <span className="flex-1">{item.label}</span>
-                      <ChevronDown
-                        size={16}
-                        className={clsx("transition-transform", isOpen ? "rotate-180" : "rotate-0")}
-                      />
-                    </button>
-                    {isOpen && (
+                      <Link
+                        href={item.href ?? "#"}
+                        className="flex flex-1 items-center gap-3 rounded-2xl px-2 py-1 text-sm font-medium"
+                      >
+                        {item.icon && <item.icon size={18} />}
+                        {item.label}
+                      </Link>
+                      <button
+                        type="button"
+                        className="rounded-full p-1 transition hover:bg-white/10"
+                        onClick={() => toggleMenu(item.label)}
+                      >
+                        <ChevronDown
+                          size={16}
+                          className={clsx("transition-transform", (openMenus[item.label] ?? isOpen) ? "rotate-180" : "rotate-0")}
+                        />
+                      </button>
+                    </div>
+                    {(openMenus[item.label] ?? isOpen) && (
                       <div className="ml-6 mt-1 space-y-1">
                         {allowedChildren.map((child) => (
                           <Link

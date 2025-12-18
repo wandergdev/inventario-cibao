@@ -8,12 +8,17 @@ import ManagementSection from "@/components/dashboard/ManagementSection";
 import { useAuth } from "@/context/AuthContext";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { ProductType } from "@/types";
-import { createProductType, deleteProductType, fetchProductTypes, updateProductType } from "@/lib/api";
+import {
+  createProductType,
+  deleteProductType,
+  fetchProductTypes,
+  updateProductType,
+} from "@/lib/api";
 
 const initialForm = {
   id: null as string | null,
   nombre: "",
-  descripcion: ""
+  descripcion: "",
 };
 
 export default function ProductTypesPage() {
@@ -54,13 +59,13 @@ export default function ProductTypesPage() {
       if (form.id) {
         await updateProductType(token, form.id, {
           nombre: form.nombre.trim(),
-          descripcion: form.descripcion.trim() || null
+          descripcion: form.descripcion.trim() || null,
         });
         setMessage("Tipo actualizado");
       } else {
         await createProductType(token, {
           nombre: form.nombre.trim(),
-          descripcion: form.descripcion.trim() || undefined
+          descripcion: form.descripcion.trim() || undefined,
         });
         setMessage("Tipo creado");
       }
@@ -72,12 +77,21 @@ export default function ProductTypesPage() {
   };
 
   const handleEdit = (type: ProductType) => {
-    setForm({ id: type.id, nombre: type.nombre, descripcion: type.descripcion ?? "" });
+    setForm({
+      id: type.id,
+      nombre: type.nombre,
+      descripcion: type.descripcion ?? "",
+    });
   };
 
   const handleDelete = async (type: ProductType) => {
     if (!token) return;
-    if (typeof window !== "undefined" && !window.confirm(`¿Eliminar "${type.nombre}"? Esta acción no se puede deshacer.`)) {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        `¿Eliminar "${type.nombre}"? Esta acción no se puede deshacer.`
+      )
+    ) {
       return;
     }
     try {
@@ -99,7 +113,9 @@ export default function ProductTypesPage() {
   if (role !== "Administrador") {
     return (
       <AdminLayout active="Tipos de producto">
-        <p className="text-sm text-slate-500">Solo los administradores pueden gestionar los catálogos.</p>
+        <p className="text-sm text-slate-500">
+          Solo los administradores pueden gestionar los catálogos.
+        </p>
       </AdminLayout>
     );
   }
@@ -107,45 +123,59 @@ export default function ProductTypesPage() {
   const rows = types.map((type) => [
     type.nombre,
     type.descripcion ?? "—",
-    (
-      <div key={type.id} className="flex gap-2">
-        <Button variant="subtle" className="px-3 py-1" onClick={() => handleEdit(type)}>
-          Editar
-        </Button>
-        <Button
-          variant="subtle"
-          className="px-3 py-1 text-rose-600"
-          onClick={() => handleDelete(type)}
-        >
-          Eliminar
-        </Button>
-      </div>
-    )
+    <div key={type.id} className="flex gap-2">
+      <Button
+        variant="subtle"
+        className="px-3 py-1"
+        onClick={() => handleEdit(type)}
+      >
+        Editar
+      </Button>
+      <Button
+        variant="subtle"
+        className="px-3 py-1 text-rose-600"
+        onClick={() => handleDelete(type)}
+      >
+        Eliminar
+      </Button>
+    </div>,
   ]);
 
   return (
     <AdminLayout active="Tipos de producto">
       {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
       <section className="mb-8 rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Catálogo</p>
-        <h2 className="text-xl font-semibold text-slate-900">Tipos de producto</h2>
-        <p className="text-sm text-slate-500">Registra nuevas categorías o actualiza las existentes.</p>
+        <p className="text-xs uppercase tracking-[0.4em] text-slate-400">
+          Catálogo
+        </p>
+        <h2 className="text-xl font-semibold text-slate-900">
+          Tipos de producto
+        </h2>
+        <p className="text-sm text-slate-500">
+          Registra nuevas categorías o actualiza las existentes.
+        </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs uppercase text-slate-500">Nombre</label>
             <Input
               value={form.nombre}
-              onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, nombre: e.target.value }))
+              }
               placeholder="Ej. Televisor"
             />
           </div>
-          <div>
-            <label className="text-xs uppercase text-slate-500">Descripción</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs uppercase text-slate-500">
+              Descripción
+            </label>
             <textarea
               className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-100"
               rows={2}
               value={form.descripcion}
-              onChange={(e) => setForm((prev) => ({ ...prev, descripcion: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, descripcion: e.target.value }))
+              }
               placeholder="Detalle opcional"
             />
           </div>
@@ -155,7 +185,11 @@ export default function ProductTypesPage() {
             {form.id ? "Actualizar" : "Guardar"}
           </Button>
           {form.id && (
-            <Button onClick={() => setForm(initialForm)} variant="subtle" className="border border-slate-200">
+            <Button
+              onClick={() => setForm(initialForm)}
+              variant="subtle"
+              className="border border-slate-200"
+            >
               Cancelar
             </Button>
           )}

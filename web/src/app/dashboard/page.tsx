@@ -9,6 +9,8 @@ import { fetchProducts, fetchSalidas } from "@/lib/api";
 import { Product, Salida } from "@/types";
 import { AlertTriangle, DollarSign, PackageCheck, ShoppingBag, Truck, UsersRound } from "lucide-react";
 
+const currencyFormatter = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export default function DashboardPage() {
   const { hydrated } = useRequireAuth();
   const { role, token, userName, userId } = useAuth();
@@ -71,7 +73,7 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
     { label: "Productos en stock", value: products.length.toString(), caption: "Actualizado online", icon: PackageCheck },
     {
       label: "Monto salidas mes",
-      value: `RD$ ${currentMonthValue.toLocaleString("es-DO")}`,
+      value: `RD$ ${currencyFormatter.format(currentMonthValue)}`,
       caption: "Basado en salidas registradas",
       icon: DollarSign
     },
@@ -112,7 +114,7 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
                     <td className="py-2 font-semibold text-slate-600">{salida.ticket}</td>
                     <td className="py-2 text-slate-700">{salida.vendedor}</td>
                     <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
-                    <td className="py-2 text-slate-900">RD$ {salida.total.toLocaleString("es-DO")}</td>
+                    <td className="py-2 text-slate-900">RD$ {currencyFormatter.format(salida.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -181,7 +183,7 @@ function VendorDashboard({ salidas, loading, vendorName, vendorId }: { salidas: 
                 <tr key={salida.id} className="border-t border-slate-100">
                   <td className="py-2 font-semibold text-slate-600">{salida.ticket}</td>
                   <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
-                  <td className="py-2 text-slate-900">RD$ {salida.total.toLocaleString("es-DO")}</td>
+                  <td className="py-2 text-slate-900">RD$ {currencyFormatter.format(salida.total)}</td>
                 </tr>
               ))}
             </tbody>

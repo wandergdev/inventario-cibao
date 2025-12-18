@@ -7,12 +7,13 @@ import Button from "@/components/ui/Button";
 import ManagementSection from "@/components/dashboard/ManagementSection";
 import { useAuth } from "@/context/AuthContext";
 import useRequireAuth from "@/hooks/useRequireAuth";
-import { Brand, Model } from "@/types";
-import { createModel, deleteModel, fetchBrands, fetchModels, updateModel } from "@/lib/api";
+import { Brand, Model, ProductType } from "@/types";
+import { createModel, deleteModel, fetchBrands, fetchModels, fetchProductTypes, updateModel } from "@/lib/api";
 
 const initialForm = {
   id: null as string | null,
   brandId: "",
+  typeId: "",
   nombre: "",
   descripcion: ""
 };
@@ -21,8 +22,10 @@ export default function ModelsPage() {
   const { token, role } = useAuth();
   const { hydrated } = useRequireAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [filterBrand, setFilterBrand] = useState<string>("");
+  const [filterType, setFilterType] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState(initialForm);
@@ -37,12 +40,22 @@ export default function ModelsPage() {
     }
   }, [token]);
 
+  const loadTypes = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await fetchProductTypes(token);
+      setProductTypes(data);
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  }, [token]);
+
   const loadModels = useCallback(
-    async (brandId?: string) => {
+    async (filters?: { brandId?: string; typeId?: string }) => {
       if (!token) return;
       setLoading(true);
       try {
-        const data = await fetchModels(token, brandId);
+        const data = await fetchModels(token, filters);
         setModels(data);
       } catch (error) {
         setMessage((error as Error).message);
@@ -56,19 +69,27 @@ export default function ModelsPage() {
   useEffect(() => {
     if (token) {
       void loadBrands();
+      void loadTypes();
     }
-  }, [token, loadBrands]);
+  }, [token, loadBrands, loadTypes]);
 
   useEffect(() => {
     if (token) {
-      void loadModels(filterBrand || undefined);
+      void loadModels({
+        brandId: filterBrand || undefined,
+        typeId: filterType || undefined
+      });
     }
-  }, [token, filterBrand, loadModels]);
+  }, [token, filterBrand, filterType, loadModels]);
 
   const handleSubmit = async () => {
     if (!token) return;
     if (!form.brandId) {
       setMessage("Selecciona la marca del modelo");
+      return;
+    }
+    if (!form.typeId) {
+      setMessage("Selecciona el tipo de producto");
       return;
     }
     if (!form.nombre.trim()) {
@@ -80,6 +101,7 @@ export default function ModelsPage() {
       if (form.id) {
         await updateModel(token, form.id, {
           brandId: form.brandId,
+          typeId: form.typeId,
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || null
         });
@@ -87,13 +109,17 @@ export default function ModelsPage() {
       } else {
         await createModel(token, {
           brandId: form.brandId,
+          typeId: form.typeId,
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || undefined
         });
         setMessage("Modelo creado");
       }
       setForm(initialForm);
-      await loadModels(filterBrand || undefined);
+      await loadModels({
+        brandId: filterBrand || undefined,
+        typeId: filterType || undefined
+      });
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -103,6 +129,7 @@ export default function ModelsPage() {
     setForm({
       id: model.id,
       brandId: model.brandId,
+      typeId: model.typeId,
       nombre: model.nombre,
       descripcion: model.descripcion ?? ""
     });
@@ -119,7 +146,10 @@ export default function ModelsPage() {
       if (form.id === model.id) {
         setForm(initialForm);
       }
-      await loadModels(filterBrand || undefined);
+      await loadModels({
+        brandId: filterBrand || undefined,
+        typeId: filterType || undefined
+      });
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -138,6 +168,7 @@ export default function ModelsPage() {
   }
 
   const rows = models.map((model) => [
+    model.typeName ?? productTypes.find((type) => type.id === model.typeId)?.nombre ?? "Sin tipo",
     model.brandName ?? brands.find((brand) => brand.id === model.brandId)?.nombre ?? "Sin marca",
     model.nombre,
     model.descripcion ?? "—",
@@ -164,8 +195,23 @@ export default function ModelsPage() {
         <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Catálogo</p>
         <h2 className="text-xl font-semibold text-slate-900">Modelos por marca</h2>
         <p className="text-sm text-slate-500">Relaciona cada modelo con su marca para facilitar la selección en salidas.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <div>
+        <div className="mt-4 grid gap-4 md:grid-cols-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs uppercase text-slate-500">Tipo</label>
+            <select
+              className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
+              value={form.typeId}
+              onChange={(e) => setForm((prev) => ({ ...prev, typeId: e.target.value }))}
+            >
+              <option value="">Selecciona tipo</option>
+              {productTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs uppercase text-slate-500">Marca</label>
             <select
               className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
@@ -180,7 +226,7 @@ export default function ModelsPage() {
               ))}
             </select>
           </div>
-          <div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs uppercase text-slate-500">Modelo</label>
             <Input
               value={form.nombre}
@@ -188,7 +234,7 @@ export default function ModelsPage() {
               placeholder="Ej. Smart TV 55'' UHD"
             />
           </div>
-          <div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs uppercase text-slate-500">Descripción</label>
             <textarea
               className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-100"
@@ -212,7 +258,22 @@ export default function ModelsPage() {
       </section>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs uppercase text-slate-500">Filtrar por tipo</label>
+          <select
+            className="mt-1 w-60 rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+          >
+            <option value="">Todos los tipos</option>
+            {productTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
           <label className="text-xs uppercase text-slate-500">Filtrar por marca</label>
           <select
             className="mt-1 w-60 rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
@@ -227,8 +288,15 @@ export default function ModelsPage() {
             ))}
           </select>
         </div>
-        {filterBrand && (
-          <Button variant="subtle" className="border border-slate-200" onClick={() => setFilterBrand("")}>
+        {(filterBrand || filterType) && (
+          <Button
+            variant="subtle"
+            className="border border-slate-200"
+            onClick={() => {
+              setFilterBrand("");
+              setFilterType("");
+            }}
+          >
             Limpiar filtro
           </Button>
         )}
@@ -237,7 +305,7 @@ export default function ModelsPage() {
       <ManagementSection
         title="Modelos registrados"
         description="Define qué opciones aparecen al registrar un producto o salida."
-        headers={["Marca", "Modelo", "Descripción", "Acciones"]}
+        headers={["Tipo", "Marca", "Modelo", "Descripción", "Acciones"]}
         rows={rows}
         loading={loading}
       />

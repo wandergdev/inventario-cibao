@@ -10,6 +10,8 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import DataTable from "@/components/ui/DataTable";
 
+const currencyFormatter = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const formatProductLabel = (product: Product) => {
   const brandModel =
     product.marca && product.modelo ? `${product.marca} ${product.modelo}` : product.marca ?? product.modelo ?? "";
@@ -77,7 +79,7 @@ export default function SalidasPage() {
     }
   };
 
-  const recentRows = salidas.slice(0, 10).map((s) => [s.ticket, s.vendedor, s.estado, `RD$ ${s.total.toLocaleString("es-DO")}`]);
+  const recentRows = salidas.slice(0, 10).map((s) => [s.ticket, s.vendedor, s.estado, `RD$ ${currencyFormatter.format(s.total)}`]);
 
   const totalItems = useMemo(() => lineItems.reduce((sum, item) => sum + item.cantidad, 0), [lineItems]);
 

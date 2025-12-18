@@ -54,6 +54,8 @@ export type Model = {
   id: string;
   brandId: string;
   brandName?: string | null;
+  typeId: string;
+  typeName?: string | null;
   nombre: string;
   descripcion?: string | null;
 };

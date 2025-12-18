@@ -132,16 +132,23 @@ export async function deleteBrand(token: string, id: string) {
   });
 }
 
-export async function fetchModels(token: string, brandId?: string) {
-  const params = brandId ? `?brandId=${brandId}` : "";
-  return apiFetch<Model[]>(`/models${params}`, {
+export async function fetchModels(token: string, filters?: { brandId?: string; typeId?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.brandId) {
+    params.append("brandId", filters.brandId);
+  }
+  if (filters?.typeId) {
+    params.append("typeId", filters.typeId);
+  }
+  const query = params.size ? `?${params.toString()}` : "";
+  return apiFetch<Model[]>(`/models${query}`, {
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }
 
 export async function createModel(
   token: string,
-  payload: { brandId: string; nombre: string; descripcion?: string | null }
+  payload: { brandId: string; typeId: string; nombre: string; descripcion?: string | null }
 ) {
   return apiFetch<Model>("/models", {
     method: "POST",
@@ -153,7 +160,7 @@ export async function createModel(
 export async function updateModel(
   token: string,
   id: string,
-  payload: { brandId?: string; nombre?: string; descripcion?: string | null }
+  payload: { brandId?: string; typeId?: string; nombre?: string; descripcion?: string | null }
 ) {
   return apiFetch<Model>(`/models/${id}`, {
     method: "PATCH",
@@ -189,6 +196,32 @@ export async function createProduct(
 ) {
   return apiFetch<Product>("/products", {
     method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateProduct(
+  token: string,
+  id: string,
+  payload: {
+    nombre?: string;
+    descripcion?: string;
+    tipoId?: string;
+    marcaId?: string;
+    modeloId?: string;
+    modeloNombre?: string;
+    precioTienda?: number;
+    precioRuta?: number;
+    stockActual?: number;
+    stockMinimo?: number;
+    suplidorId?: string;
+    disponible?: boolean;
+    motivoNoDisponible?: string | null;
+  }
+) {
+  return apiFetch<Product>(`/products/${id}`, {
+    method: "PATCH",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload)
   });

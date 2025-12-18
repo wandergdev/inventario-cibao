@@ -131,7 +131,7 @@ export default function BrandsPage() {
         <h2 className="text-xl font-semibold text-slate-900">Marcas principales</h2>
         <p className="text-sm text-slate-500">Mantén el listado actualizado para clasificar los productos.</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs uppercase text-slate-500">Nombre</label>
             <Input
               value={form.nombre}
@@ -139,7 +139,7 @@ export default function BrandsPage() {
               placeholder="Ej. Samsung"
             />
           </div>
-          <div>
+          <div className="flex flex-col gap-1">
             <label className="text-xs uppercase text-slate-500">Descripción</label>
             <textarea
               className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-100"

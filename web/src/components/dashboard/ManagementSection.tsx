@@ -13,7 +13,7 @@ export default function ManagementSection({
   description: string;
   headers: string[];
   form?: ReactNode;
-  rows: string[][];
+  rows: Array<Array<string | ReactNode>>;
   loading?: boolean;
 }) {
   return (
