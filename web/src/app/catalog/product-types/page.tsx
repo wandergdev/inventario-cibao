@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -28,6 +28,7 @@ export default function ProductTypesPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState(initialForm);
+  const [search, setSearch] = useState("");
 
   const loadTypes = useCallback(async () => {
     if (!token) return;
@@ -106,6 +107,14 @@ export default function ProductTypesPage() {
     }
   };
 
+  const filteredTypes = useMemo(
+    () =>
+      types.filter((type) =>
+        type.nombre.toLowerCase().includes(search.trim().toLowerCase())
+      ),
+    [types, search]
+  );
+
   if (!hydrated) {
     return null;
   }
@@ -120,7 +129,7 @@ export default function ProductTypesPage() {
     );
   }
 
-  const rows = types.map((type) => [
+  const rows = filteredTypes.map((type) => [
     type.nombre,
     type.descripcion ?? "—",
     <div key={type.id} className="flex gap-2">
@@ -195,6 +204,14 @@ export default function ProductTypesPage() {
           )}
         </div>
       </section>
+      <div className="mb-4 flex flex-col gap-1">
+        <label className="text-xs uppercase text-slate-500">Filtrar por nombre</label>
+        <Input
+          placeholder="Buscar tipo..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
 
       <ManagementSection
         title="Tipos registrados"

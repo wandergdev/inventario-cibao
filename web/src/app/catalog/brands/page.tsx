@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -23,6 +23,7 @@ export default function BrandsPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState(initialForm);
+  const [search, setSearch] = useState("");
 
   const loadBrands = useCallback(async () => {
     if (!token) return;
@@ -92,6 +93,14 @@ export default function BrandsPage() {
     }
   };
 
+  const filteredBrands = useMemo(
+    () =>
+      brands.filter((brand) =>
+        brand.nombre.toLowerCase().includes(search.trim().toLowerCase())
+      ),
+    [brands, search]
+  );
+
   if (!hydrated) {
     return null;
   }
@@ -104,7 +113,7 @@ export default function BrandsPage() {
     );
   }
 
-  const rows = brands.map((brand) => [
+  const rows = filteredBrands.map((brand) => [
     brand.nombre,
     brand.descripcion ?? "—",
     (
@@ -161,6 +170,14 @@ export default function BrandsPage() {
           )}
         </div>
       </section>
+      <div className="mb-4 flex flex-col gap-1">
+        <label className="text-xs uppercase text-slate-500">Filtrar por nombre</label>
+        <Input
+          placeholder="Buscar marca..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
 
       <ManagementSection
         title="Marcas registradas"
