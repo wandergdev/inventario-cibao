@@ -5,10 +5,12 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ManagementSection from "@/components/dashboard/ManagementSection";
+import StatsGrid from "@/components/dashboard/StatsGrid";
 import { useAuth } from "@/context/AuthContext";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { Brand, Model, ProductType } from "@/types";
 import { createModel, deleteModel, fetchBrands, fetchModels, fetchProductTypes, updateModel } from "@/lib/api";
+import { PackageSearch, Factory, Tag, Filter, X } from "lucide-react";
 
 const initialForm = {
   id: null as string | null,
@@ -29,6 +31,8 @@ export default function ModelsPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState(initialForm);
+  const [showFormModal, setShowFormModal] = useState(false);
+  const isEditing = Boolean(form.id);
 
   const loadBrands = useCallback(async () => {
     if (!token) return;
@@ -82,6 +86,16 @@ export default function ModelsPage() {
     }
   }, [token, filterBrand, filterType, loadModels]);
 
+  const openCreateModal = () => {
+    setForm(initialForm);
+    setShowFormModal(true);
+  };
+
+  const closeFormModal = () => {
+    setShowFormModal(false);
+    setForm(initialForm);
+  };
+
   const handleSubmit = async () => {
     if (!token) return;
     if (!form.brandId) {
@@ -120,6 +134,7 @@ export default function ModelsPage() {
         brandId: filterBrand || undefined,
         typeId: filterType || undefined
       });
+      closeFormModal();
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -133,6 +148,7 @@ export default function ModelsPage() {
       nombre: model.nombre,
       descripcion: model.descripcion ?? ""
     });
+    setShowFormModal(true);
   };
 
   const handleDelete = async (model: Model) => {
@@ -188,74 +204,152 @@ export default function ModelsPage() {
     )
   ]);
 
+  const filteredCount = models.length;
+  const totalBrands = brands.length;
+  const totalTypes = productTypes.length;
+  const activeFilters = Number(Boolean(filterBrand)) + Number(Boolean(filterType));
+
   return (
     <AdminLayout active="Modelos">
       {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
-      <section className="mb-8 rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Catálogo</p>
-        <h2 className="text-xl font-semibold text-slate-900">Modelos por marca</h2>
-        <p className="text-sm text-slate-500">Relaciona cada modelo con su marca para facilitar la selección en salidas.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs uppercase text-slate-500">Tipo</label>
-            <select
-              className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
-              value={form.typeId}
-              onChange={(e) => setForm((prev) => ({ ...prev, typeId: e.target.value }))}
-            >
-              <option value="">Selecciona tipo</option>
-              {productTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs uppercase text-slate-500">Marca</label>
-            <select
-              className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
-              value={form.brandId}
-              onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
-            >
-              <option value="">Selecciona marca</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>
-                  {brand.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs uppercase text-slate-500">Modelo</label>
-            <Input
-              value={form.nombre}
-              onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
-              placeholder="Ej. Smart TV 55'' UHD"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs uppercase text-slate-500">Descripción</label>
-            <textarea
-              className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-100"
-              rows={2}
-              value={form.descripcion}
-              onChange={(e) => setForm((prev) => ({ ...prev, descripcion: e.target.value }))}
-              placeholder="Detalle opcional"
-            />
+      <StatsGrid
+        className="mt-6 gap-6"
+        itemClassName="p-5"
+        stats={[
+          {
+            label: "Modelos listados",
+            value: filteredCount.toString(),
+            caption: filterBrand || filterType ? "Según filtros aplicados" : "Total registrados",
+            icon: PackageSearch,
+            iconClassName: "bg-indigo-50 text-indigo-500",
+          },
+          {
+            label: "Marcas registradas",
+            value: totalBrands.toString(),
+            caption: "Disponibles para asociar",
+            icon: Factory,
+            iconClassName: "bg-emerald-50 text-emerald-600",
+          },
+          {
+            label: "Tipos disponibles",
+            value: totalTypes.toString(),
+            caption: "Categorías activas",
+            icon: Tag,
+            iconClassName: "bg-slate-100 text-slate-600",
+          },
+          {
+            label: "Filtros activos",
+            value: activeFilters.toString(),
+            caption: activeFilters ? "Personaliza la vista" : "Sin filtros",
+            icon: Filter,
+            iconClassName: "bg-amber-50 text-amber-600",
+          },
+        ]}
+      />
+
+      <div className="mt-10 mb-4 flex justify-end">
+        <Button variant="accent" onClick={openCreateModal}>
+          Nuevo modelo
+        </Button>
+      </div>
+
+      {showFormModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.4em] text-slate-400">
+                  {isEditing ? "Editar modelo" : "Nuevo modelo"}
+                </p>
+                <h2 className="text-xl font-semibold text-slate-900">Catálogo de modelos</h2>
+                <p className="text-sm text-slate-500">Relaciona cada modelo con su marca y tipo.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:text-slate-700"
+                onClick={closeFormModal}
+                aria-label="Cerrar"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="mt-4 space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="model-type" className="text-xs uppercase text-slate-500">
+                    Tipo
+                  </label>
+                  <select
+                    id="model-type"
+                    className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
+                    value={form.typeId}
+                    onChange={(e) => setForm((prev) => ({ ...prev, typeId: e.target.value }))}
+                  >
+                    <option value="">Selecciona tipo</option>
+                    {productTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="model-brand" className="text-xs uppercase text-slate-500">
+                    Marca
+                  </label>
+                  <select
+                    id="model-brand"
+                    className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
+                    value={form.brandId}
+                    onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
+                  >
+                    <option value="">Selecciona marca</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="model-name" className="text-xs uppercase text-slate-500">
+                    Modelo
+                  </label>
+                  <Input
+                    id="model-name"
+                    value={form.nombre}
+                    onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                    placeholder="Ej. Smart TV 55'' UHD"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="model-description" className="text-xs uppercase text-slate-500">
+                    Descripción
+                  </label>
+                  <textarea
+                    id="model-description"
+                    className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                    rows={3}
+                    value={form.descripcion}
+                    onChange={(e) => setForm((prev) => ({ ...prev, descripcion: e.target.value }))}
+                    placeholder="Detalle opcional"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="subtle" className="border border-slate-200" onClick={closeFormModal}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSubmit} variant="accent">
+                {isEditing ? "Actualizar" : "Guardar"}
+              </Button>
+            </div>
           </div>
         </div>
-        <div className="mt-4 flex gap-3">
-          <Button onClick={handleSubmit} variant="accent">
-            {form.id ? "Actualizar" : "Guardar"}
-          </Button>
-          {form.id && (
-            <Button onClick={() => setForm(initialForm)} variant="subtle" className="border border-slate-200">
-              Cancelar
-            </Button>
-          )}
-        </div>
-      </section>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex flex-col gap-1">

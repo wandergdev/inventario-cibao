@@ -5,6 +5,7 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ManagementSection from "@/components/dashboard/ManagementSection";
+import StatsGrid from "@/components/dashboard/StatsGrid";
 import { useAuth } from "@/context/AuthContext";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { ProductType } from "@/types";
@@ -14,6 +15,7 @@ import {
   fetchProductTypes,
   updateProductType,
 } from "@/lib/api";
+import { Layers, FileText, Tag, X } from "lucide-react";
 
 const initialForm = {
   id: null as string | null,
@@ -29,6 +31,8 @@ export default function ProductTypesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useState("");
+  const [showFormModal, setShowFormModal] = useState(false);
+  const isEditing = Boolean(form.id);
 
   const loadTypes = useCallback(async () => {
     if (!token) return;
@@ -48,6 +52,16 @@ export default function ProductTypesPage() {
       void loadTypes();
     }
   }, [token, loadTypes]);
+
+  const openCreateModal = () => {
+    setForm(initialForm);
+    setShowFormModal(true);
+  };
+
+  const closeFormModal = () => {
+    setShowFormModal(false);
+    setForm(initialForm);
+  };
 
   const handleSubmit = async () => {
     if (!token) return;
@@ -72,6 +86,7 @@ export default function ProductTypesPage() {
       }
       setForm(initialForm);
       await loadTypes();
+      closeFormModal();
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -83,6 +98,7 @@ export default function ProductTypesPage() {
       nombre: type.nombre,
       descripcion: type.descripcion ?? "",
     });
+    setShowFormModal(true);
   };
 
   const handleDelete = async (type: ProductType) => {
@@ -150,62 +166,132 @@ export default function ProductTypesPage() {
     </div>,
   ]);
 
+  const totalTypes = types.length;
+  const typesWithDescription = types.filter(
+    (type) => (type.descripcion ?? "").trim().length > 0
+  ).length;
+  const filteredCount = filteredTypes.length;
+
   return (
     <AdminLayout active="Tipos de producto">
       {message && <p className="mb-4 text-sm text-slate-500">{message}</p>}
-      <section className="mb-8 rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
-        <p className="text-xs uppercase tracking-[0.4em] text-slate-400">
-          Catálogo
-        </p>
-        <h2 className="text-xl font-semibold text-slate-900">
-          Tipos de producto
-        </h2>
-        <p className="text-sm text-slate-500">
-          Registra nuevas categorías o actualiza las existentes.
-        </p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs uppercase text-slate-500">Nombre</label>
-            <Input
-              value={form.nombre}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, nombre: e.target.value }))
-              }
-              placeholder="Ej. Televisor"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs uppercase text-slate-500">
-              Descripción
-            </label>
-            <textarea
-              className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-100"
-              rows={2}
-              value={form.descripcion}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, descripcion: e.target.value }))
-              }
-              placeholder="Detalle opcional"
-            />
+      <StatsGrid
+        className="mt-6 gap-6"
+        itemClassName="p-5"
+        stats={[
+          {
+            label: "Tipos registrados",
+            value: totalTypes.toString(),
+            caption: "Disponibles para productos",
+            icon: Layers,
+            iconClassName: "bg-indigo-50 text-indigo-500",
+          },
+          {
+            label: "Con descripción",
+            value: typesWithDescription.toString(),
+            caption: "Documentados para ventas",
+            icon: FileText,
+            iconClassName: "bg-emerald-50 text-emerald-600",
+          },
+          {
+            label: "Coincidencias",
+            value: filteredCount.toString(),
+            caption: "Según tu búsqueda",
+            icon: Tag,
+            iconClassName: "bg-slate-100 text-slate-600",
+          },
+        ]}
+      />
+
+      <div className="mt-10 mb-4 flex justify-end">
+        <Button variant="accent" onClick={openCreateModal}>
+          Nuevo tipo
+        </Button>
+      </div>
+
+      {showFormModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-xl rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.4em] text-slate-400">
+                  {isEditing ? "Editar tipo" : "Nuevo tipo"}
+                </p>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  Clasifica tus productos
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Mantén ordenado el catálogo para facilitar los registros.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:text-slate-700"
+                onClick={closeFormModal}
+                aria-label="Cerrar"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="type-name"
+                  className="text-xs uppercase text-slate-500"
+                >
+                  Nombre
+                </label>
+                <Input
+                  id="type-name"
+                  value={form.nombre}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, nombre: e.target.value }))
+                  }
+                  placeholder="Ej. Televisor"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="type-description"
+                  className="text-xs uppercase text-slate-500"
+                >
+                  Descripción
+                </label>
+                <textarea
+                  id="type-description"
+                  className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                  rows={3}
+                  value={form.descripcion}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      descripcion: e.target.value,
+                    }))
+                  }
+                  placeholder="Detalle opcional"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button
+                variant="subtle"
+                className="border border-slate-200"
+                onClick={closeFormModal}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={handleSubmit} variant="accent">
+                {isEditing ? "Actualizar" : "Guardar"}
+              </Button>
+            </div>
           </div>
         </div>
-        <div className="mt-4 flex gap-3">
-          <Button onClick={handleSubmit} variant="accent">
-            {form.id ? "Actualizar" : "Guardar"}
-          </Button>
-          {form.id && (
-            <Button
-              onClick={() => setForm(initialForm)}
-              variant="subtle"
-              className="border border-slate-200"
-            >
-              Cancelar
-            </Button>
-          )}
-        </div>
-      </section>
+      )}
+
       <div className="mb-4 flex flex-col gap-1">
-        <label className="text-xs uppercase text-slate-500">Filtrar por nombre</label>
+        <label className="text-xs uppercase text-slate-500">
+          Filtrar por nombre
+        </label>
         <Input
           placeholder="Buscar tipo..."
           value={search}
