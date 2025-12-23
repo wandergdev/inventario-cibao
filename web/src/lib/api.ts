@@ -8,7 +8,8 @@ import {
   Supplier,
   Salida,
   Brand,
-  Model
+  Model,
+  SalidaStatus
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
@@ -188,6 +189,7 @@ export async function createProduct(
     precioTienda: number;
     precioRuta: number;
     stockActual: number;
+    stockNoDisponible?: number;
     stockMinimo: number;
     suplidorId?: string;
     disponible: boolean;
@@ -214,6 +216,7 @@ export async function updateProduct(
     precioTienda?: number;
     precioRuta?: number;
     stockActual?: number;
+    stockNoDisponible?: number;
     stockMinimo?: number;
     suplidorId?: string;
     disponible?: boolean;
@@ -229,6 +232,42 @@ export async function updateProduct(
 
 export async function fetchSalidas(token: string) {
   return apiFetch<Salida[]>("/salidas", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchSalidaStatuses(token: string) {
+  return apiFetch<SalidaStatus[]>("/salida-statuses", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function createSalidaStatus(
+  token: string,
+  payload: { nombre: string; descripcion?: string; activo?: boolean }
+) {
+  return apiFetch<SalidaStatus>("/salida-statuses", {
+    method: "POST",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateSalidaStatus(
+  token: string,
+  id: string,
+  payload: { nombre?: string; descripcion?: string | null; activo?: boolean }
+) {
+  return apiFetch<SalidaStatus>(`/salida-statuses/${id}`, {
+    method: "PATCH",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteSalidaStatus(token: string, id: string) {
+  return apiFetch<void>(`/salida-statuses/${id}`, {
+    method: "DELETE",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }

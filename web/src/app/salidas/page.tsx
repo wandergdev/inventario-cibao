@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { useAuth } from "@/context/AuthContext";
-import { createSalida, fetchProducts, fetchSalidas } from "@/lib/api";
-import { Product, Salida } from "@/types";
+import { createSalida, fetchProducts, fetchSalidas, fetchSalidaStatuses } from "@/lib/api";
+import { Product, Salida, SalidaStatus } from "@/types";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import DataTable from "@/components/ui/DataTable";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -24,7 +25,8 @@ export default function SalidasPage() {
   const { token, role } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [salidas, setSalidas] = useState<Salida[]>([]);
-  const [form, setForm] = useState({ tipoSalida: "tienda", fechaEntrega: "", productId: "", cantidad: 1 });
+  const [statuses, setStatuses] = useState<SalidaStatus[]>([]);
+  const [form, setForm] = useState({ tipoSalida: "tienda", fechaEntrega: "", estado: "", productId: "", cantidad: 1 });
   const [lineItems, setLineItems] = useState<Array<{ productId: string; nombre: string; cantidad: number }>>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,28 @@ export default function SalidasPage() {
       void load();
     }
   }, [token, hydrated]);
+  const loadStatuses = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await fetchSalidaStatuses(token);
+      setStatuses(data);
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      void loadStatuses();
+    }
+  }, [token, loadStatuses]);
+
+  useEffect(() => {
+    const firstActive = statuses.find((status) => status.activo);
+    if (firstActive && !form.estado) {
+      setForm((prev) => ({ ...prev, estado: firstActive.nombre }));
+    }
+  }, [statuses, form.estado]);
 
   const addLineItem = (productId: string, cantidad: number) => {
     const product = products.find((p) => p.id === productId);
@@ -64,10 +88,14 @@ export default function SalidasPage() {
     if (lineItems.length === 0) {
       return setMessage("Agrega al menos un producto a la salida");
     }
+    if (!form.estado) {
+      return setMessage("Selecciona el estado de la salida");
+    }
     try {
       await createSalida(token, {
         tipoSalida: form.tipoSalida as "tienda" | "ruta",
         fechaEntrega: form.fechaEntrega || undefined,
+        estado: form.estado,
         productos: lineItems.map((item) => ({ productId: item.productId, cantidad: item.cantidad }))
       });
       setMessage("Salida registrada");
@@ -82,6 +110,20 @@ export default function SalidasPage() {
   const recentRows = salidas.slice(0, 10).map((s) => [s.ticket, s.vendedor, s.estado, `RD$ ${currencyFormatter.format(s.total)}`]);
 
   const totalItems = useMemo(() => lineItems.reduce((sum, item) => sum + item.cantidad, 0), [lineItems]);
+  const productOptions = useMemo(
+    () => [
+      { value: "", label: "Selecciona producto" },
+      ...products.map((product) => ({
+        value: product.id,
+        label: formatProductLabel(product)
+      }))
+    ],
+    [products]
+  );
+  const statusOptions = useMemo(
+    () => statuses.filter((status) => status.activo).map((status) => ({ value: status.nombre, label: status.nombre })),
+    [statuses]
+  );
 
   const canCreate = role === "Administrador" || role === "Vendedor";
 
@@ -115,29 +157,47 @@ export default function SalidasPage() {
                 onChange={(e) => setForm((prev) => ({ ...prev, fechaEntrega: e.target.value }))}
               />
             </div>
+            <div>
+              <label className="text-xs uppercase text-slate-400">Estado</label>
+              <SearchableSelect
+                className="mt-1"
+                value={form.estado}
+                onChange={(next) => setForm((prev) => ({ ...prev, estado: next }))}
+                options={[{ value: "", label: "Selecciona estado" }, ...statusOptions]}
+                placeholder="Selecciona estado"
+              />
+              {!statusOptions.length && (
+                <p className="mt-1 text-xs text-amber-600">Agrega al menos un estado activo para registrar salidas.</p>
+              )}
+            </div>
           </div>
           <div className="mt-4 rounded-2xl border border-dashed border-slate-200 p-4">
             <p className="text-sm font-semibold text-slate-700">Productos</p>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <select
-                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm"
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <SearchableSelect
+                className="w-64"
                 value={form.productId}
-                onChange={(e) => setForm((prev) => ({ ...prev, productId: e.target.value }))}
-              >
-                <option value="">Selecciona producto</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {formatProductLabel(product)}
-                  </option>
-                ))}
-              </select>
-              <Input
-                type="number"
-                placeholder="Cantidad"
-                className="w-32"
-                value={form.cantidad}
-                onChange={(e) => setForm((prev) => ({ ...prev, cantidad: Number(e.target.value) }))}
+                onChange={(next) => setForm((prev) => ({ ...prev, productId: next }))}
+                options={productOptions}
+                placeholder="Selecciona producto"
               />
+              <div className="flex w-32 flex-col gap-1">
+                <label className="text-xs uppercase text-slate-400">Cantidad</label>
+                <Input
+                  type="number"
+                  placeholder="Cantidad"
+                  min={1}
+                  step={1}
+                  value={form.cantidad}
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    setForm((prev) => ({
+                      ...prev,
+                      cantidad: Number.isNaN(parsed) ? 1 : Math.max(1, parsed)
+                    }));
+                  }}
+                />
+              </div>
               <Button
                 type="button"
                 variant="accent"
@@ -146,6 +206,7 @@ export default function SalidasPage() {
                   addLineItem(form.productId, form.cantidad);
                   setForm((prev) => ({ ...prev, productId: "", cantidad: 1 }));
                 }}
+                disabled={!form.productId || !form.estado}
               >
                 Agregar
               </Button>

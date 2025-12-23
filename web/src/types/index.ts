@@ -31,6 +31,7 @@ export type Product = {
   precioTienda: number;
   precioRuta: number;
   stockActual: number;
+  stockNoDisponible?: number;
   stockMinimo: number;
   disponible: boolean;
   motivoNoDisponible?: string;
@@ -110,4 +111,11 @@ export type Movimiento = {
   producto: string;
   usuarioId: string;
   usuario: string;
+};
+
+export type SalidaStatus = {
+  id: string;
+  nombre: string;
+  descripcion?: string | null;
+  activo: boolean;
 };

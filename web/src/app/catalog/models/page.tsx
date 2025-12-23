@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import AdminLayout from "@/components/layout/AdminLayout";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 import ManagementSection from "@/components/dashboard/ManagementSection";
 import StatsGrid from "@/components/dashboard/StatsGrid";
 import { useAuth } from "@/context/AuthContext";
@@ -279,37 +280,31 @@ export default function ModelsPage() {
                   <label htmlFor="model-type" className="text-xs uppercase text-slate-500">
                     Tipo
                   </label>
-                  <select
-                    id="model-type"
-                    className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
+                  <SearchableSelect
+                    className="mt-1"
                     value={form.typeId}
-                    onChange={(e) => setForm((prev) => ({ ...prev, typeId: e.target.value }))}
-                  >
-                    <option value="">Selecciona tipo</option>
-                    {productTypes.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(next) => setForm((prev) => ({ ...prev, typeId: next }))}
+                    options={[
+                      { value: "", label: "Selecciona tipo" },
+                      ...productTypes.map((type) => ({ value: type.id, label: type.nombre }))
+                    ]}
+                    placeholder="Selecciona tipo"
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label htmlFor="model-brand" className="text-xs uppercase text-slate-500">
                     Marca
                   </label>
-                  <select
-                    id="model-brand"
-                    className="mt-1 w-full rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
+                  <SearchableSelect
+                    className="mt-1"
                     value={form.brandId}
-                    onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
-                  >
-                    <option value="">Selecciona marca</option>
-                    {brands.map((brand) => (
-                      <option key={brand.id} value={brand.id}>
-                        {brand.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(next) => setForm((prev) => ({ ...prev, brandId: next }))}
+                    options={[
+                      { value: "", label: "Selecciona marca" },
+                      ...brands.map((brand) => ({ value: brand.id, label: brand.nombre }))
+                    ]}
+                    placeholder="Selecciona marca"
+                  />
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -354,33 +349,29 @@ export default function ModelsPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs uppercase text-slate-500">Filtrar por tipo</label>
-          <select
-            className="mt-1 w-60 rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
+          <SearchableSelect
+            className="mt-1 w-60"
             value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-          >
-            <option value="">Todos los tipos</option>
-            {productTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.nombre}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setFilterType(next)}
+            options={[
+              { value: "", label: "Todos los tipos" },
+              ...productTypes.map((type) => ({ value: type.id, label: type.nombre }))
+            ]}
+            placeholder="Todos los tipos"
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs uppercase text-slate-500">Filtrar por marca</label>
-          <select
-            className="mt-1 w-60 rounded-2xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-800"
+          <SearchableSelect
+            className="mt-1 w-60"
             value={filterBrand}
-            onChange={(e) => setFilterBrand(e.target.value)}
-          >
-            <option value="">Todas las marcas</option>
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>
-                {brand.nombre}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setFilterBrand(next)}
+            options={[
+              { value: "", label: "Todas las marcas" },
+              ...brands.map((brand) => ({ value: brand.id, label: brand.nombre }))
+            ]}
+            placeholder="Todas las marcas"
+          />
         </div>
         {(filterBrand || filterType) && (
           <Button

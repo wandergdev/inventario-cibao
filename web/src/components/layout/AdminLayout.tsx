@@ -51,7 +51,12 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Modelos", href: "/catalog/models", roles: ["Administrador"], icon: BadgeHelp }
     ]
   },
-  { label: "Salidas", href: "/salidas", icon: Truck },
+  {
+    label: "Salidas",
+    href: "/salidas",
+    icon: Truck,
+    children: [{ label: "Estados", href: "/salidas/estados", roles: ["Administrador"], icon: Truck }]
+  },
   { label: "Pedidos", href: "/pedidos", icon: ClipboardCheck },
   { label: "Inventario", href: "#", icon: Boxes },
   { label: "Suplidores", href: "/suppliers", icon: ClipboardList },
