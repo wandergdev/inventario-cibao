@@ -6,8 +6,6 @@ import { pool, query } from "../db/pool";
 const salidasRouter = express.Router();
 const allowedRoles = ["Administrador", "Vendedor"];
 
-const SALIDA_STATES = ["pendiente", "entregada", "cancelada"];
-
 type SalidaProducto = {
   productId: string;
   cantidad: number;
@@ -44,16 +42,24 @@ type CreateSalidaBody = {
  *             schema:
  *               $ref: "#/components/schemas/Salida"
  */
+const getActiveStates = async () => {
+  const { rows } = await query(`SELECT nombre FROM salida_estados WHERE activo = true ORDER BY nombre ASC`);
+  return rows.map((row) => row.nombre);
+};
+
 salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequest, res: Response) => {
   const body = (req.body ?? {}) as CreateSalidaBody;
   const tipoSalida = body.tipoSalida ?? "tienda";
-  const estado = body.estado ?? "pendiente";
+
+  const estadosDisponibles = await getActiveStates();
+  const defaultEstado = estadosDisponibles[0] ?? "Pendiente de entrega";
+  const estado = body.estado ?? defaultEstado;
 
   if (!body.productos || body.productos.length === 0) {
     return res.status(400).json({ message: "Debes enviar al menos un producto" });
   }
 
-  if (!SALIDA_STATES.includes(estado)) {
+  if (!estadosDisponibles.includes(estado)) {
     return res.status(400).json({ message: "Estado de salida no válido" });
   }
 

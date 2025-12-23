@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS productos (
   precio_tienda NUMERIC(10,2) NOT NULL,
   precio_ruta NUMERIC(10,2) NOT NULL,
   stock_actual INTEGER NOT NULL DEFAULT 0,
+  stock_no_disponible INTEGER NOT NULL DEFAULT 0,
   stock_minimo INTEGER NOT NULL DEFAULT 0,
   id_suplidor UUID REFERENCES suplidores(id_suplidor),
   fecha_ingreso TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -80,10 +81,22 @@ CREATE TABLE IF NOT EXISTS salidas_alm (
   fecha_salida TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   fecha_entrega DATE,
   total NUMERIC(10,2) NOT NULL,
-  estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+  estado VARCHAR(50) NOT NULL DEFAULT 'Pendiente de entrega',
   ticket VARCHAR(100) UNIQUE NOT NULL,
   tipo_salida VARCHAR(20) NOT NULL DEFAULT 'tienda'
 );
+
+CREATE TABLE IF NOT EXISTS salida_estados (
+  id_estado UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre VARCHAR(50) UNIQUE NOT NULL,
+  descripcion TEXT,
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE salidas_alm
+  ADD CONSTRAINT IF NOT EXISTS fk_salidas_estado
+  FOREIGN KEY (estado) REFERENCES salida_estados(nombre) ON UPDATE CASCADE;
 
 CREATE TABLE IF NOT EXISTS detalle_salidas (
   id_detalle UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -146,6 +159,13 @@ VALUES
   ('Aire acondicionado', 'Equipos tipo mini split o ventana'),
   ('Laptop', 'Computadoras portátiles'),
   ('Equipo de sonido', 'Bocinas y sistemas de audio')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO salida_estados (nombre, descripcion)
+VALUES
+  ('Pendiente de entrega', 'Salida registrada a la espera de ser entregada'),
+  ('Apartado', 'Productos apartados o reservados para un cliente'),
+  ('Entregado', 'Salida finalizada y entregada al cliente')
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO marcas (nombre, descripcion)

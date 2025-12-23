@@ -22,6 +22,7 @@ const baseSelect = `
          p.precio_tienda,
          p.precio_ruta,
          p.stock_actual,
+         p.stock_no_disponible,
          p.stock_minimo,
          p.disponible,
          p.motivo_no_disponible,
@@ -47,6 +48,7 @@ const mapProduct = (row: any) => ({
   precioTienda: row.precio_tienda,
   precioRuta: row.precio_ruta,
   stockActual: row.stock_actual,
+  stockNoDisponible: row.stock_no_disponible,
   stockMinimo: row.stock_minimo,
   disponible: row.disponible,
   motivoNoDisponible: row.motivo_no_disponible,
@@ -151,6 +153,7 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
       precioTienda,
       precioRuta,
       stockActual = 0,
+      stockNoDisponible = 0,
       stockMinimo = 0,
       suplidorId,
       disponible = true,
@@ -167,6 +170,14 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
 
     if (precioTienda === undefined || precioRuta === undefined) {
       return res.status(400).json({ message: "Debes indicar los precios de tienda y ruta" });
+    }
+
+    if (stockNoDisponible < 0) {
+      return res.status(400).json({ message: "Las unidades inactivas no pueden ser negativas" });
+    }
+
+    if (stockNoDisponible > stockActual) {
+      return res.status(400).json({ message: "Las unidades inactivas no pueden superar el stock actual" });
     }
 
     const { rowCount: typeExists } = await query(`SELECT 1 FROM tipos_producto WHERE id_tipo = $1`, [tipoId]);
@@ -215,9 +226,11 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
       }
     }
 
+    const cleanReason = typeof motivoNoDisponible === "string" ? motivoNoDisponible.trim() : null;
+
     const { rows } = await query(
-      `INSERT INTO productos (nombre, descripcion, id_tipo_producto, id_marca, id_modelo, precio_tienda, precio_ruta, stock_actual, stock_minimo, id_suplidor, disponible, motivo_no_disponible)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO productos (nombre, descripcion, id_tipo_producto, id_marca, id_modelo, precio_tienda, precio_ruta, stock_actual, stock_no_disponible, stock_minimo, id_suplidor, disponible, motivo_no_disponible)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         nombre,
@@ -228,10 +241,11 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
         precioTienda,
         precioRuta,
         stockActual,
+        stockNoDisponible,
         stockMinimo,
         suplidorId ?? null,
         disponible,
-        motivoNoDisponible
+        cleanReason
       ]
     );
 
@@ -299,10 +313,7 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
       descripcion: "descripcion",
       precioTienda: "precio_tienda",
       precioRuta: "precio_ruta",
-      stockActual: "stock_actual",
-      stockMinimo: "stock_minimo",
-      disponible: "disponible",
-      motivoNoDisponible: "motivo_no_disponible"
+      stockMinimo: "stock_minimo"
     };
 
     Object.entries(mapFields).forEach(([key, column]) => {
@@ -311,10 +322,44 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
       }
     });
 
+    let targetStockActual = current.stock_actual;
+    let targetStockNoDisponible = current.stock_no_disponible ?? 0;
     let targetTipoId = body.tipoId ?? current.id_tipo_producto;
     let targetMarcaId = body.marcaId ?? current.id_marca;
     let finalModeloId = current.id_modelo;
     let modeloChanged = false;
+
+    if (body.stockActual !== undefined) {
+      const parsed = Number(body.stockActual);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        return res.status(400).json({ message: "Stock actual no válido" });
+      }
+      targetStockActual = parsed;
+      setField("stock_actual", parsed);
+    }
+
+    if (body.stockNoDisponible !== undefined) {
+      const parsed = Number(body.stockNoDisponible);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        return res.status(400).json({ message: "Las unidades inactivas no pueden ser negativas" });
+      }
+      targetStockNoDisponible = parsed;
+      setField("stock_no_disponible", parsed);
+    }
+
+    if (targetStockNoDisponible > targetStockActual) {
+      return res.status(400).json({ message: "Las unidades inactivas no pueden superar el stock actual" });
+    }
+
+    if (body.disponible !== undefined) {
+      setField("disponible", body.disponible);
+    }
+
+    if (body.motivoNoDisponible !== undefined) {
+      const clean =
+        typeof body.motivoNoDisponible === "string" ? body.motivoNoDisponible.trim() : "";
+      setField("motivo_no_disponible", clean ? clean : null);
+    }
 
     if (body.suplidorId !== undefined) {
       if (body.suplidorId) {
@@ -390,8 +435,6 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
 
     if (modeloChanged) {
       setField("id_modelo", finalModeloId ?? null);
-    } else if ((body.tipoId !== undefined || body.marcaId !== undefined) && finalModeloId) {
-      // modelo sigue siendo válido gracias a la verificación anterior, no es necesario actualizar la columna
     }
 
     if (!updates.length) {

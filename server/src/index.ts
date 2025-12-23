@@ -9,6 +9,7 @@ import usersRouter from "./routes/users";
 import suppliersRouter from "./routes/suppliers";
 import productsRouter from "./routes/products";
 import salidasRouter from "./routes/salidas";
+import salidaStatusesRouter from "./routes/salidaStatuses";
 import pedidosRouter from "./routes/pedidos";
 import movimientosRouter from "./routes/movimientos";
 import productTypesRouter from "./routes/productTypes";
@@ -33,6 +34,7 @@ app.use("/product-types", productTypesRouter);
 app.use("/brands", brandsRouter);
 app.use("/models", modelsRouter);
 app.use("/salidas", salidasRouter);
+app.use("/salida-statuses", salidaStatusesRouter);
 app.use("/pedidos", pedidosRouter);
 app.use("/movimientos", movimientosRouter);
 
