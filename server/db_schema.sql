@@ -83,7 +83,8 @@ CREATE TABLE IF NOT EXISTS salidas_alm (
   total NUMERIC(10,2) NOT NULL,
   estado VARCHAR(50) NOT NULL DEFAULT 'Pendiente de entrega',
   ticket VARCHAR(100) UNIQUE NOT NULL,
-  tipo_salida VARCHAR(20) NOT NULL DEFAULT 'tienda'
+  tipo_salida VARCHAR(20) NOT NULL DEFAULT 'tienda',
+  tipo_venta VARCHAR(20) NOT NULL DEFAULT 'contado'
 );
 
 CREATE TABLE IF NOT EXISTS salida_estados (

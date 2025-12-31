@@ -14,6 +14,7 @@ type SalidaProducto = {
 
 type CreateSalidaBody = {
   tipoSalida?: "tienda" | "ruta";
+  tipoVenta?: "contado" | "credito";
   fechaEntrega?: string;
   estado?: string;
   productos?: SalidaProducto[];
@@ -50,6 +51,7 @@ const getActiveStates = async () => {
 salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequest, res: Response) => {
   const body = (req.body ?? {}) as CreateSalidaBody;
   const tipoSalida = body.tipoSalida ?? "tienda";
+  const tipoVenta = body.tipoVenta ?? "contado";
 
   const estadosDisponibles = await getActiveStates();
   const defaultEstado = estadosDisponibles[0] ?? "Pendiente de entrega";
@@ -127,10 +129,10 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
     const fechaEntrega = body.fechaEntrega ? new Date(body.fechaEntrega) : null;
 
     const salidaInsert = await client.query(
-      `INSERT INTO salidas_alm (id_vendedor, fecha_entrega, total, estado, ticket, tipo_salida)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO salidas_alm (id_vendedor, fecha_entrega, total, estado, ticket, tipo_salida, tipo_venta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id_salida, fecha_salida`,
-      [tokenUser.id, fechaEntrega, total, estado, ticket, tipoSalida]
+      [tokenUser.id, fechaEntrega, total, estado, ticket, tipoSalida, tipoVenta]
     );
 
     const salidaId = salidaInsert.rows[0].id_salida;
@@ -167,6 +169,8 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
       total,
       estado,
       tipoSalida,
+      tipoVenta,
+      tipo_venta: tipoVenta,
       detalles: details
     });
   } catch (error) {
@@ -305,6 +309,7 @@ salidasRouter.get("/", requireAuth(allowedRoles), async (req: AuthenticatedReque
          s.total,
          s.estado,
          s.tipo_salida,
+         s.tipo_venta,
          u.nombre || ' ' || u.apellido AS vendedor,
          COALESCE(
            json_agg(
