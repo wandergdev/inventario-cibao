@@ -20,13 +20,24 @@ const formatProductLabel = (product: Product) => {
   return `${typePart}${product.nombre}${brandModel ? ` (${brandModel.trim()})` : ""}`;
 };
 
+const formatTipoVenta = (tipo?: string) => {
+  return tipo === "credito" ? "Crédito" : "Contado";
+};
+
 export default function SalidasPage() {
   const { hydrated } = useRequireAuth();
   const { token, role } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [salidas, setSalidas] = useState<Salida[]>([]);
   const [statuses, setStatuses] = useState<SalidaStatus[]>([]);
-  const [form, setForm] = useState({ tipoSalida: "tienda", fechaEntrega: "", estado: "", productId: "", cantidad: 1 });
+  const [form, setForm] = useState({
+    tipoSalida: "tienda",
+    tipoVenta: "contado",
+    fechaEntrega: "",
+    estado: "",
+    productId: "",
+    cantidad: 1
+  });
 const [lineItems, setLineItems] = useState<Array<{ productId: string; nombre: string; cantidad: number }>>([]);
 const [message, setMessage] = useState<string | null>(null);
 const [loading, setLoading] = useState(false);
@@ -98,6 +109,7 @@ const [savingEdit, setSavingEdit] = useState(false);
     try {
       await createSalida(token, {
         tipoSalida: form.tipoSalida as "tienda" | "ruta",
+        tipoVenta: form.tipoVenta as "contado" | "credito",
         fechaEntrega: form.fechaEntrega || undefined,
         estado: form.estado,
         productos: lineItems.map((item) => ({ productId: item.productId, cantidad: item.cantidad }))
@@ -122,6 +134,7 @@ const [savingEdit, setSavingEdit] = useState(false);
     s.ticket,
     s.vendedor,
     s.estado,
+    formatTipoVenta(s.tipo_venta ?? s.tipoVenta),
     `RD$ ${currencyFormatter.format(s.total)}`,
     canCreate ? (
       <Button variant="subtle" className="px-3 py-1 text-xs" onClick={() => openEditSalida(s)}>
@@ -198,7 +211,7 @@ const [savingEdit, setSavingEdit] = useState(false);
       {canCreate && (
         <section className="mb-6 rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Registrar salida</h2>
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="text-xs uppercase text-slate-400">Tipo de salida</label>
               <select
@@ -208,6 +221,17 @@ const [savingEdit, setSavingEdit] = useState(false);
               >
                 <option value="tienda">Tienda</option>
                 <option value="ruta">Ruta</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs uppercase text-slate-400">Tipo de venta</label>
+              <select
+                className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm"
+                value={form.tipoVenta}
+                onChange={(e) => setForm((prev) => ({ ...prev, tipoVenta: e.target.value }))}
+              >
+                <option value="contado">Contado</option>
+                <option value="credito">Crédito</option>
               </select>
             </div>
             <div>
@@ -318,7 +342,7 @@ const [savingEdit, setSavingEdit] = useState(false);
         </div>
         <div className="mt-4">
           <DataTable
-            headers={["Ticket", "Vendedor", "Estado", "Monto", "Acciones"]}
+            headers={["Ticket", "Vendedor", "Estado", "Tipo de venta", "Monto", "Acciones"]}
             rows={recentRows}
             loading={loading}
           />

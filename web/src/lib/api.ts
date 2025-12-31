@@ -286,7 +286,13 @@ export async function deleteSalidaStatus(token: string, id: string) {
 
 export async function createSalida(
   token: string,
-  payload: { tipoSalida?: "tienda" | "ruta"; productos: Array<{ productId: string; cantidad: number; precioUnitario?: number }>; fechaEntrega?: string }
+  payload: {
+    tipoSalida?: "tienda" | "ruta";
+    tipoVenta?: "contado" | "credito";
+    estado?: string;
+    productos: Array<{ productId: string; cantidad: number; precioUnitario?: number }>;
+    fechaEntrega?: string;
+  }
 ) {
   return apiFetch<Salida>("/salidas", {
     method: "POST",

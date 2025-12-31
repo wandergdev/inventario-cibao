@@ -80,6 +80,8 @@ export type Salida = {
   total: number;
   estado: string;
   tipo_salida: string;
+  tipo_venta?: "contado" | "credito";
+  tipoVenta?: "contado" | "credito";
   vendedor: string;
   detalles: SalidaDetalle[];
 };

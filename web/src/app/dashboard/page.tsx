@@ -11,6 +11,7 @@ import { AlertTriangle, DollarSign, PackageCheck, ShoppingBag, Truck, UsersRound
 import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatTipoVenta = (tipo?: string) => (tipo === "credito" ? "Crédito" : "Contado");
 
 export default function DashboardPage() {
   const { hydrated } = useRequireAuth();
@@ -127,6 +128,7 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
                   <th className="py-2">Ticket</th>
                   <th className="py-2">Vendedor</th>
                   <th className="py-2">Estado</th>
+                  <th className="py-2">Venta</th>
                   <th className="py-2">Monto</th>
                 </tr>
               </thead>
@@ -136,6 +138,7 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
                     <td className="py-2 font-semibold text-slate-600">{salida.ticket}</td>
                     <td className="py-2 text-slate-700">{salida.vendedor}</td>
                     <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
+                    <td className="py-2 text-slate-500 capitalize">{formatTipoVenta(salida.tipo_venta ?? salida.tipoVenta)}</td>
                     <td className="py-2 text-slate-900">RD$ {currencyFormatter.format(salida.total)}</td>
                   </tr>
                 ))}
@@ -197,6 +200,7 @@ function VendorDashboard({ salidas, loading, vendorName, vendorId }: { salidas: 
               <tr>
                 <th className="py-2">Ticket</th>
                 <th className="py-2">Estado</th>
+                <th className="py-2">Venta</th>
                 <th className="py-2">Monto</th>
               </tr>
             </thead>
@@ -205,6 +209,7 @@ function VendorDashboard({ salidas, loading, vendorName, vendorId }: { salidas: 
                 <tr key={salida.id} className="border-t border-slate-100">
                   <td className="py-2 font-semibold text-slate-600">{salida.ticket}</td>
                   <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
+                  <td className="py-2 text-slate-500 capitalize">{formatTipoVenta(salida.tipo_venta ?? salida.tipoVenta)}</td>
                   <td className="py-2 text-slate-900">RD$ {currencyFormatter.format(salida.total)}</td>
                 </tr>
               ))}
