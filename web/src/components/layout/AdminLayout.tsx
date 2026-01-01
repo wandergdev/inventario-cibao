@@ -1,6 +1,5 @@
 "use client";
 
-import type { ComponentType } from "react";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
@@ -19,19 +18,20 @@ import {
   Tags,
   BadgeHelp,
   Layers,
-  ChevronDown
+  ChevronDown,
+  type LucideIcon
 } from "lucide-react";
 
 type NavItem = {
   label: string;
   href?: string;
-  icon?: ComponentType<{ size?: number }>;
+  icon?: LucideIcon;
   roles?: string[];
   children?: Array<{
     label: string;
     href: string;
     roles?: string[];
-    icon?: ComponentType<{ size?: number }>;
+    icon?: LucideIcon;
   }>;
 };
 
