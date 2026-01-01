@@ -186,7 +186,9 @@ export default function SalidaStatusesPage() {
             </div>
             <div className="mt-4 space-y-4">
               <div>
-                <label className="text-xs uppercase text-slate-500">Nombre</label>
+                <label className="text-xs uppercase text-slate-500">
+                  Nombre <span className="text-red-500">*</span>
+                </label>
                 <Input
                   className="mt-1"
                   value={form.nombre}

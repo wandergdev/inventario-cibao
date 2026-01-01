@@ -214,7 +214,7 @@ export default function BrandsPage() {
             <div className="mt-4 space-y-4">
               <div className="flex flex-col gap-1">
                 <label htmlFor="brand-name" className="text-xs uppercase text-slate-500">
-                  Nombre
+                  Nombre <span className="text-red-500">*</span>
                 </label>
                 <Input
                   id="brand-name"

@@ -239,7 +239,7 @@ export default function ProductTypesPage() {
                   htmlFor="type-name"
                   className="text-xs uppercase text-slate-500"
                 >
-                  Nombre
+                  Nombre <span className="text-red-500">*</span>
                 </label>
                 <Input
                   id="type-name"

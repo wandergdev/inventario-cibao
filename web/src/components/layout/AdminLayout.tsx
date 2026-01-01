@@ -59,12 +59,12 @@ const NAV_ITEMS: NavItem[] = [
     children: [{ label: "Estados", href: "/salidas/estados", roles: ["Administrador"], icon: Truck }]
   },
   { label: "Pedidos", href: "/pedidos", icon: ClipboardCheck },
-  { label: "Inventario", icon: Boxes },
+  { label: "Inventario", href: "/inventory", icon: Boxes },
   { label: "Suplidores", href: "/suppliers", icon: ClipboardList, roles: ["Administrador"] },
   { label: "Movimientos", href: "/movimientos", icon: History, roles: ["Administrador"] },
-  { label: "Reportes", icon: BarChart3 },
-  { label: "Usuarios", icon: UsersRound, roles: ["Administrador"] },
-  { label: "Configuración", icon: Settings, roles: ["Administrador"] }
+  { label: "Reportes", href: "/reports", icon: BarChart3, roles: ["Administrador"] },
+  { label: "Usuarios", href: "/users", icon: UsersRound, roles: ["Administrador"] },
+  { label: "Configuración", href: "/settings", icon: Settings, roles: ["Administrador"] }
 ];
 
 export default function AdminLayout({

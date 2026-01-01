@@ -243,7 +243,7 @@ export default function SuppliersPage() {
                 <div className="mt-2 grid gap-3 lg:grid-cols-3">
                   <div className="flex flex-col gap-1">
                     <label htmlFor="new-supplier-name" className="text-xs uppercase text-slate-500">
-                      Nombre de la empresa
+                      Nombre de la empresa <span className="text-red-500">*</span>
                     </label>
                     <Input
                       id="new-supplier-name"
@@ -352,7 +352,7 @@ export default function SuppliersPage() {
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="flex flex-col gap-1">
                   <label htmlFor="edit-company-name" className="text-xs uppercase text-slate-500">
-                    Nombre de la empresa
+                    Nombre de la empresa <span className="text-red-500">*</span>
                   </label>
                   <Input
                     id="edit-company-name"

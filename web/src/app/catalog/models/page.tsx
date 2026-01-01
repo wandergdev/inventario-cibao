@@ -278,7 +278,7 @@ export default function ModelsPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-1">
                   <label htmlFor="model-type" className="text-xs uppercase text-slate-500">
-                    Tipo
+                    Tipo <span className="text-red-500">*</span>
                   </label>
                   <SearchableSelect
                     className="mt-1"
@@ -293,7 +293,7 @@ export default function ModelsPage() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label htmlFor="model-brand" className="text-xs uppercase text-slate-500">
-                    Marca
+                    Marca <span className="text-red-500">*</span>
                   </label>
                   <SearchableSelect
                     className="mt-1"
@@ -310,7 +310,7 @@ export default function ModelsPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-1">
                   <label htmlFor="model-name" className="text-xs uppercase text-slate-500">
-                    Modelo
+                    Modelo <span className="text-red-500">*</span>
                   </label>
                   <Input
                     id="model-name"
