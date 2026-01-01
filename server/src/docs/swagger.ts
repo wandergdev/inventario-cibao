@@ -5,6 +5,9 @@ import path from "path";
 const routesTsPath = path.resolve(__dirname, "../routes/*.ts");
 const routesJsPath = path.resolve(__dirname, "../routes/*.js");
 
+const defaultServerUrl = process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+const swaggerServerUrl = process.env.SWAGGER_SERVER_URL ?? defaultServerUrl;
+
 const options: Options = {
   definition: {
     openapi: "3.0.3",
@@ -13,7 +16,7 @@ const options: Options = {
       version: "0.1.0",
       description: "Documentación inicial del backend (autenticación, inventario, reportes)."
     },
-    servers: [{ url: "http://localhost:4000" }],
+    servers: [{ url: swaggerServerUrl }],
     components: {
       securitySchemes: {
         bearerAuth: {
