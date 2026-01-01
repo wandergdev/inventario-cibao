@@ -95,9 +95,19 @@ CREATE TABLE IF NOT EXISTS salida_estados (
   fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE salidas_alm
-  ADD CONSTRAINT IF NOT EXISTS fk_salidas_estado
-  FOREIGN KEY (estado) REFERENCES salida_estados(nombre) ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints
+    WHERE constraint_name = 'fk_salidas_estado'
+      AND table_name = 'salidas_alm'
+  ) THEN
+    ALTER TABLE salidas_alm
+      ADD CONSTRAINT fk_salidas_estado
+      FOREIGN KEY (estado) REFERENCES salida_estados(nombre) ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS detalle_salidas (
   id_detalle UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -146,6 +156,8 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_esperada ON pedidos_suplidores(fech
 -- Datos base opcionales -------------------------------------------------------------
 INSERT INTO roles (nombre_rol, descripcion)
 VALUES
+  ('Administrador', 'Acceso completo a la plataforma de inventario'),
+  ('Vendedor', 'Gestiona consultas de productos y registro de salidas'),
   ('Vendedor Tienda', 'Gestiona salidas en tienda física'),
   ('Vendedor Ruta', 'Gestiona salidas en ruta'),
   ('Encargado de Tienda', 'Administra inventario y salidas'),
@@ -180,3 +192,23 @@ VALUES
 ON CONFLICT (nombre) DO NOTHING;
 
 -- Modelos iniciales están fuera de alcance; se insertarán al crear productos.
+
+DO $seed_admin$
+DECLARE
+  admin_role_id UUID;
+BEGIN
+  SELECT id_rol INTO admin_role_id FROM roles WHERE nombre_rol = 'Administrador' LIMIT 1;
+
+  IF admin_role_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM usuarios WHERE email = 'gerente@electrocibao.com'
+  ) THEN
+    INSERT INTO usuarios (nombre, apellido, email, password, id_rol)
+    VALUES (
+      'Gerente',
+      'General',
+      'gerente@electrocibao.com',
+      '$2a$10$gLuZNW7rv13lGi3wLOpMvux11F5aZ6fb.2ykdEQI9xlPpPwe0mw3O',
+      admin_role_id
+    );
+  END IF;
+END $seed_admin$;
