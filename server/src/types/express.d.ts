@@ -13,6 +13,7 @@ declare module "express" {
     status(code: number): Response;
     json(body: any): Response;
     send(body?: any): Response;
+    redirect(url: string): Response;
   }
 
   export type NextFunction = (err?: unknown) => void;
