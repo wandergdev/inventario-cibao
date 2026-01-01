@@ -15,7 +15,9 @@ const currencyFormatter = new Intl.NumberFormat("en-US", { minimumFractionDigits
 
 const formatProductLabel = (product: Product) => {
   const brandModel =
-    product.marca && product.modelo ? `${product.marca} ${product.modelo}` : product.marca ?? product.modelo ?? "";
+    product.marcaNombre && product.modeloNombre
+      ? `${product.marcaNombre} ${product.modeloNombre}`
+      : product.marcaNombre ?? product.modeloNombre ?? "";
   const typePart = product.tipoNombre ? `${product.tipoNombre} - ` : "";
   return `${typePart}${product.nombre}${brandModel ? ` (${brandModel.trim()})` : ""}`;
 };
