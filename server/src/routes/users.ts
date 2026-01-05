@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { Request, Response } from "express";
 import { query } from "../db/pool";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
+import { sendCredentialsEmail } from "../services/mailer";
 
 const usersRouter = express.Router();
 const adminRoles = ["Administrador"];
@@ -151,6 +152,8 @@ usersRouter.get("/", requireAuth(adminRoles), async (req: AuthenticatedRequest, 
  *       409:
  *         description: Email duplicado
  */
+const allowedRolesForNewUser = ["Administrador", "Vendedor"];
+
 usersRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { nombre, apellido, email, password, roleName } = (req.body || {}) as CreateUserBody;
@@ -159,12 +162,17 @@ usersRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedRequest,
       return res.status(400).json({ message: "Todos los campos son obligatorios" });
     }
 
+    if (!allowedRolesForNewUser.includes(roleName)) {
+      return res.status(400).json({ message: "Solo se pueden crear usuarios Administradores o Vendedores" });
+    }
+
     const roleId = await fetchRoleId(roleName);
     if (!roleId) {
       return res.status(400).json({ message: "Rol no válido" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const plainPassword = password;
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
     const { rows } = await query(
       `INSERT INTO usuarios (nombre, apellido, email, password, id_rol)
        VALUES ($1, $2, $3, $4, $5)
@@ -172,7 +180,17 @@ usersRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedRequest,
       [nombre, apellido, email, hashedPassword, roleId, roleName]
     );
 
-    res.status(201).json(mapUser(rows[0] as UserRow));
+    const created = rows[0] as UserRow;
+
+    const emailSent = await sendCredentialsEmail({
+      to: email,
+      name: `${nombre} ${apellido}`.trim(),
+      password: plainPassword,
+      role: roleName,
+      senderEmail: req.user?.email
+    });
+
+    res.status(201).json({ user: mapUser(created), emailSent });
   } catch (error) {
     if ((error as { code?: string }).code === "23505") {
       return res.status(409).json({ message: "El email ya está registrado" });
@@ -219,6 +237,54 @@ usersRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedRequest,
  *       404:
  *         description: Usuario no encontrado
  */
+/**
+ * @openapi
+ * /users/me/password:
+ *   patch:
+ *     summary: Actualizar contraseña propia
+ *     tags:
+ *       - Usuarios
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newPassword
+ *             properties:
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Contraseña actualizada
+ *       400:
+ *         description: Datos inválidos
+ *       401:
+ *         description: Token inválido
+ */
+usersRouter.patch("/me/password", requireAuth(), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { newPassword } = (req.body || {}) as { newPassword?: string };
+    if (!req.user) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
+    if (!newPassword) {
+      return res.status(400).json({ message: "La nueva contraseña es requerida" });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await query(`UPDATE usuarios SET password = $1 WHERE id_usuario = $2`, [hashed, req.user.id]);
+    return res.json({ message: "Contraseña actualizada" });
+  } catch (error) {
+    console.error("Error actualizando contraseña", error);
+    res.status(500).json({ message: "Error interno" });
+  }
+});
+
 usersRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params || {};

@@ -15,6 +15,7 @@ import movimientosRouter from "./routes/movimientos";
 import productTypesRouter from "./routes/productTypes";
 import brandsRouter from "./routes/brands";
 import modelsRouter from "./routes/models";
+import rolesRouter from "./routes/roles";
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use("/products", productsRouter);
 app.use("/product-types", productTypesRouter);
 app.use("/brands", brandsRouter);
 app.use("/models", modelsRouter);
+app.use("/roles", rolesRouter);
 app.use("/salidas", salidasRouter);
 app.use("/salida-statuses", salidaStatusesRouter);
 app.use("/pedidos", pedidosRouter);

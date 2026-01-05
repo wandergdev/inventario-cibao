@@ -17,5 +17,6 @@ const ensureEnv = (key: RequiredVar) => {
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: ensureEnv("DATABASE_URL"),
-  jwtSecret: ensureEnv("JWT_SECRET")
+  jwtSecret: ensureEnv("JWT_SECRET"),
+  appUrl: process.env.APP_PORTAL_URL ?? process.env.RENDER_EXTERNAL_URL ?? "http://localhost:3000"
 };
