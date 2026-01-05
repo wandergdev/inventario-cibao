@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import AdminLayout from "@/components/layout/AdminLayout";
 import StatsGrid from "@/components/dashboard/StatsGrid";
 import useRequireAuth from "@/hooks/useRequireAuth";
@@ -66,7 +67,10 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
         const date = new Date(s.fecha_salida);
         return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
       })
-      .reduce((sum, salida) => sum + salida.total, 0);
+      .reduce((sum, salida) => {
+        const amount = Number(salida.total ?? 0);
+        return sum + (Number.isFinite(amount) ? amount : 0);
+      }, 0);
   }, [salidas]);
 
   const pendingSalidas = salidas.filter((s) => s.estado === "pendiente");
@@ -94,23 +98,46 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
   ];
 
   const [filterEstado, setFilterEstado] = useState("");
+  const weekRange = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const day = start.getDay(); // 0 (Sun) ... 6 (Sat)
+    const diff = day === 0 ? -6 : 1 - day; // start week on Monday
+    start.setDate(start.getDate() + diff);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, []);
+
+  const weeklySalidas = useMemo(
+    () =>
+      salidas.filter((salida) => {
+        const date = new Date(salida.fecha_salida);
+        return date >= weekRange.start && date <= weekRange.end;
+      }),
+    [salidas, weekRange]
+  );
+
   const estadoOptions = useMemo(() => {
-    const unique = Array.from(new Set(salidas.map((salida) => salida.estado)));
+    const unique = Array.from(new Set(weeklySalidas.map((salida) => salida.estado)));
     return [{ value: "", label: "Todos los estados" }, ...unique.map((estado) => ({ value: estado, label: estado }))];
-  }, [salidas]);
+  }, [weeklySalidas]);
+
   const recent = useMemo(
     () =>
-      salidas
+      weeklySalidas
         .filter((salida) => (filterEstado ? salida.estado === filterEstado : true))
         .slice(0, 5),
-    [salidas, filterEstado]
+    [weeklySalidas, filterEstado]
   );
 
   return (
     <div className="space-y-6">
       <StatsGrid stats={stats} />
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="Salidas recientes" loading={loading}>
+        <Card title="Salidas de la semana" loading={loading}>
           <div className="mb-4 flex flex-col gap-1">
             <label className="text-xs uppercase text-slate-400">Filtrar por estado</label>
             <SearchableSelect
@@ -121,30 +148,41 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
               placeholder="Todos los estados"
             />
           </div>
-          <div className="overflow-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase text-slate-400">
-                <tr>
-                  <th className="py-2">Ticket</th>
-                  <th className="py-2">Vendedor</th>
-                  <th className="py-2">Estado</th>
-                  <th className="py-2">Venta</th>
-                  <th className="py-2">Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((salida) => (
-                  <tr key={salida.id} className="border-t border-slate-100">
-                    <td className="py-2 font-semibold text-slate-600">{salida.ticket}</td>
-                    <td className="py-2 text-slate-700">{salida.vendedor}</td>
-                    <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
-                    <td className="py-2 text-slate-500 capitalize">{formatTipoVenta(salida.tipo_venta ?? salida.tipoVenta)}</td>
-                    <td className="py-2 text-slate-900">RD$ {currencyFormatter.format(salida.total)}</td>
+          {recent.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600">
+              <p className="mb-2">Aún no se han registrado salidas en la semana actual.</p>
+              <Link href="/movimientos" className="font-semibold text-sky-600 hover:underline">
+                Salidas generales →
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="text-xs uppercase text-slate-400">
+                  <tr>
+                    <th className="py-2">Ticket</th>
+                    <th className="py-2">Vendedor</th>
+                    <th className="py-2">Estado</th>
+                    <th className="py-2">Venta</th>
+                    <th className="py-2">Monto</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {recent.map((salida) => (
+                    <tr key={salida.id} className="border-t border-slate-100">
+                      <td className="py-2 font-semibold text-slate-600">{salida.ticket}</td>
+                      <td className="py-2 text-slate-700">{salida.vendedor}</td>
+                      <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
+                      <td className="py-2 text-slate-500 capitalize">{formatTipoVenta(salida.tipo_venta ?? salida.tipoVenta)}</td>
+                      <td className="py-2 text-slate-900">
+                        RD$ {currencyFormatter.format(Number.isFinite(Number(salida.total)) ? Number(salida.total) : 0)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
         <Card title="Alertas recientes" loading={loading}>
           {alerts.length === 0 ? (
@@ -210,7 +248,9 @@ function VendorDashboard({ salidas, loading, vendorName, vendorId }: { salidas: 
                   <td className="py-2 font-semibold text-slate-600">{salida.ticket}</td>
                   <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
                   <td className="py-2 text-slate-500 capitalize">{formatTipoVenta(salida.tipo_venta ?? salida.tipoVenta)}</td>
-                  <td className="py-2 text-slate-900">RD$ {currencyFormatter.format(salida.total)}</td>
+                  <td className="py-2 text-slate-900">
+                    RD$ {currencyFormatter.format(Number.isFinite(Number(salida.total)) ? Number(salida.total) : 0)}
+                  </td>
                 </tr>
               ))}
             </tbody>

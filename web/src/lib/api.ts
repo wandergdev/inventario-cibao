@@ -360,6 +360,23 @@ export async function fetchPedidos(token: string) {
   });
 }
 
+export async function downloadSalidasReport(token: string, start: string, end: string) {
+  const url = new URL(`${API_URL}/salidas/report`);
+  url.searchParams.set("start", start);
+  url.searchParams.set("end", end);
+
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "No se pudo generar el reporte");
+  }
+
+  return res.blob();
+}
+
 export async function createPedido(
   token: string,
   payload: { productId: string; supplierId: string; cantidadSolicitada: number; fechaEsperada?: string }
