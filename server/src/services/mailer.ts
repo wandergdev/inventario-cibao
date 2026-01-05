@@ -96,3 +96,100 @@ export const sendCredentialsEmail = async ({ to, name, password, role, senderEma
     return false;
   }
 };
+
+type SaleNotificationPayload = {
+  recipients: string[];
+  ticket: string;
+  total: number;
+  estado: string;
+  tipoVenta: string;
+  vendedor: string;
+  fecha: Date | string;
+  detalles: Array<{ nombre: string; cantidad: number; precioUnitario: number; subtotal: number }>;
+};
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" }).format(value);
+
+const buildSaleTemplate = (payload: SaleNotificationPayload) => {
+  const formattedDate = new Date(payload.fecha).toLocaleString("es-DO");
+  const detailRows = payload.detalles
+    .map(
+      (detail) => `
+        <tr>
+          <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0;">${detail.nombre}</td>
+          <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; text-align:center;">${detail.cantidad}</td>
+          <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; text-align:right;">${formatCurrency(detail.precioUnitario)}</td>
+          <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; text-align:right;">${formatCurrency(detail.subtotal)}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-family: 'Helvetica Neue', Arial, sans-serif; background-color:#f5f7fb; padding:24px;">
+      <tr>
+        <td>
+          <table width="600" cellpadding="0" cellspacing="0" style="margin:0 auto; background-color:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 12px 35px rgba(15,23,42,0.12);">
+            <tr>
+              <td style="background-color:#0b1540; padding:32px;">
+                <p style="margin:0; text-transform:uppercase; letter-spacing:4px; color:#60a5fa; font-size:12px;">Electro Cibao</p>
+                <h1 style="margin-top:12px; color:#ffffff; font-size:24px;">Nueva salida registrada</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px; color:#0f172a;">
+                <p style="margin:0 0 16px 0; font-size:15px;">Se registró una nueva salida con ticket <strong>${payload.ticket}</strong>.</p>
+                <ul style="list-style:none; padding:0; margin:0 0 24px 0; color:#475569; font-size:14px;">
+                  <li><strong>Vendedor:</strong> ${payload.vendedor}</li>
+                  <li><strong>Fecha:</strong> ${formattedDate}</li>
+                  <li><strong>Estado:</strong> ${payload.estado}</li>
+                  <li><strong>Tipo de venta:</strong> ${payload.tipoVenta}</li>
+                  <li><strong>Total:</strong> ${formatCurrency(payload.total)}</li>
+                </ul>
+                <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+                  <thead>
+                    <tr style="background-color:#f1f5f9; color:#0f172a;">
+                      <th style="padding:10px 12px; text-align:left;">Producto</th>
+                      <th style="padding:10px 12px; text-align:center;">Cantidad</th>
+                      <th style="padding:10px 12px; text-align:right;">Precio unidad</th>
+                      <th style="padding:10px 12px; text-align:right;">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${detailRows}
+                  </tbody>
+                </table>
+                <p style="margin-top:24px; font-size:13px; color:#94a3b8;">Este mensaje se envió automáticamente para mantener al equipo al tanto de las ventas registradas.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+};
+
+export const sendSaleNotificationEmail = async (payload: SaleNotificationPayload) => {
+  if (!transporter || !payload.recipients.length) {
+    return false;
+  }
+
+  const [primary, ...rest] = payload.recipients;
+  const html = buildSaleTemplate(payload);
+
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: primary,
+      bcc: rest.length ? rest : undefined,
+      subject: `Nueva salida ${payload.ticket} - ${formatCurrency(payload.total)}`,
+      html
+    });
+    console.log(`Alerta de salida enviada a administradores (${payload.recipients.length})`);
+    return true;
+  } catch (error) {
+    console.error("No se pudo enviar la alerta de salida", error);
+    return false;
+  }
+};

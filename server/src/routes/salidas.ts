@@ -2,6 +2,7 @@ import express from "express";
 import type { Response } from "express";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 import { pool, query } from "../db/pool";
+import { sendSaleNotificationEmail } from "../services/mailer";
 
 const salidasRouter = express.Router();
 const allowedRoles = ["Administrador", "Vendedor"];
@@ -48,6 +49,51 @@ const getActiveStates = async () => {
   return rows.map((row) => row.nombre);
 };
 
+const getAdminEmails = async () => {
+  const { rows } = await query(
+    `SELECT u.email
+     FROM usuarios u
+     INNER JOIN roles r ON r.id_rol = u.id_rol
+     WHERE r.nombre_rol = 'Administrador' AND u.activo = true`
+  );
+  return rows.map((row) => row.email as string).filter(Boolean);
+};
+
+const getUserFullName = async (userId: string) => {
+  const { rows } = await query(`SELECT nombre, apellido FROM usuarios WHERE id_usuario = $1 LIMIT 1`, [userId]);
+  if (!rows.length) {
+    return null;
+  }
+  const nombre = rows[0].nombre ?? "";
+  const apellido = rows[0].apellido ?? "";
+  return `${nombre} ${apellido}`.trim() || nombre || apellido || null;
+};
+
+type SaleNotificationData = {
+  ticket: string;
+  total: number;
+  estado: string;
+  tipoVenta: string;
+  vendedor: string;
+  fecha: Date | string;
+  detalles: Array<{ nombre: string; cantidad: number; precioUnitario: number; subtotal: number }>;
+};
+
+const notifyAdminsOfSale = async (data: SaleNotificationData) => {
+  try {
+    const recipients = await getAdminEmails();
+    if (!recipients.length) {
+      return;
+    }
+    await sendSaleNotificationEmail({
+      recipients,
+      ...data
+    });
+  } catch (error) {
+    console.error("No se pudo notificar a administradores sobre la salida", error);
+  }
+};
+
 salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequest, res: Response) => {
   const body = (req.body ?? {}) as CreateSalidaBody;
   const tipoSalida = body.tipoSalida ?? "tienda";
@@ -70,6 +116,7 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
     return res.status(401).json({ message: "Sesión inválida" });
   }
 
+  const vendedorNombre = (await getUserFullName(tokenUser.id)) ?? tokenUser.email;
   const productIds = body.productos.map((p) => p.productId);
   const client = await pool.connect();
 
@@ -162,6 +209,16 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
     }
 
     await client.query("COMMIT");
+
+    void notifyAdminsOfSale({
+      ticket,
+      total,
+      estado,
+      tipoVenta,
+      vendedor: vendedorNombre,
+      fecha: salidaInsert.rows[0].fecha_salida,
+      detalles: details
+    });
 
     return res.status(201).json({
       id: salidaId,
@@ -337,6 +394,187 @@ salidasRouter.get("/", requireAuth(allowedRoles), async (req: AuthenticatedReque
   } catch (error) {
     console.error("Error listando salidas", error);
     res.status(500).json({ message: "Error interno" });
+  }
+});
+
+const escapeXml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
+const buildReportWorkbook = (
+  rows: Array<{ ticket: string; fecha_salida: Date; estado: string; tipo_venta: string; total: number; vendedor: string; productos: string }>,
+  total: number,
+  start: Date,
+  end: Date
+) => {
+  const formatCurrency = (value: number) =>
+    `RD$ ${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+  const rangeLabel = `${start.toLocaleDateString("es-DO")} - ${end.toLocaleDateString("es-DO")}`;
+  const headerRow = `
+    <Row>
+      <Cell><Data ss:Type="String">Ticket</Data></Cell>
+      <Cell><Data ss:Type="String">Fecha</Data></Cell>
+      <Cell><Data ss:Type="String">Vendedor</Data></Cell>
+      <Cell><Data ss:Type="String">Productos</Data></Cell>
+      <Cell><Data ss:Type="String">Estado</Data></Cell>
+      <Cell><Data ss:Type="String">Tipo venta</Data></Cell>
+      <Cell><Data ss:Type="String">Monto</Data></Cell>
+    </Row>`;
+
+  const dataRows = rows.length
+    ? rows
+        .map(
+      (row) => `
+    <Row>
+      <Cell><Data ss:Type="String">${escapeXml(row.ticket)}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(new Date(row.fecha_salida).toLocaleString("es-DO"))}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(row.vendedor ?? "Sin vendedor")}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(row.productos ?? "Sin productos")}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(row.estado ?? "")}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(row.tipo_venta ?? "")}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(formatCurrency(Number(row.total ?? 0)))}</Data></Cell>
+    </Row>`
+      )
+      .join("")
+    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin salidas registradas para este rango.</Data></Cell></Row>`;
+
+  const totalRow = `
+    <Row>
+      <Cell><Data ss:Type="String">Total ventas</Data></Cell>
+      <Cell ss:MergeAcross="5"><Data ss:Type="String">${escapeXml(formatCurrency(total))}</Data></Cell>
+    </Row>`;
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Salidas">
+  <Table>
+    <Row>
+      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de salidas (${escapeXml(rangeLabel)})</Data></Cell>
+    </Row>
+    ${headerRow}
+    ${dataRows}
+    ${totalRow}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+};
+
+/**
+ * @openapi
+ * /salidas/report:
+ *   get:
+ *     summary: Descargar reporte de salidas en Excel
+ *     tags:
+ *       - Salidas
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: start
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: end
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: Archivo Excel generado
+ *         content:
+ *           application/vnd.ms-excel:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Parámetros inválidos
+ *       401:
+ *         description: Token inválido
+ *       500:
+ *         description: Error al generar el reporte
+ */
+salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { start, end } = req.query as { start?: string; end?: string };
+    if (!start || !end) {
+      return res.status(400).json({ message: "Debes especificar las fechas start y end (YYYY-MM-DD)" });
+    }
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return res.status(400).json({ message: "Fechas inválidas" });
+    }
+    endDate.setHours(23, 59, 59, 999);
+
+    const { rows: rangeRows } = await query(`SELECT MIN(fecha_salida) AS min_fecha, MAX(fecha_salida) AS max_fecha FROM salidas_alm`);
+    const minFecha = rangeRows[0]?.min_fecha ? new Date(rangeRows[0].min_fecha) : null;
+    const maxFecha = rangeRows[0]?.max_fecha ? new Date(rangeRows[0].max_fecha) : null;
+    if (!minFecha || !maxFecha) {
+      return res.status(400).json({ message: "Aún no existen salidas registradas para generar reportes." });
+    }
+
+    if (startDate < minFecha || endDate > maxFecha) {
+      return res.status(400).json({
+        message: `El rango debe estar entre ${minFecha.toLocaleDateString("es-DO")} y ${maxFecha.toLocaleDateString("es-DO")}.`
+      });
+    }
+
+    const { rows } = await query(
+      `SELECT s.ticket,
+              s.fecha_salida,
+              s.estado,
+              s.tipo_venta,
+              s.total,
+              u.nombre || ' ' || u.apellido AS vendedor,
+              COALESCE(
+                string_agg(p.nombre || ' x' || d.cantidad, ', ' ORDER BY p.nombre),
+                'Sin productos'
+              ) AS productos
+       FROM salidas_alm s
+       INNER JOIN usuarios u ON u.id_usuario = s.id_vendedor
+       LEFT JOIN detalle_salidas d ON d.id_salida = s.id_salida
+       LEFT JOIN productos p ON p.id_producto = d.id_producto
+       WHERE s.fecha_salida BETWEEN $1 AND $2
+       GROUP BY s.id_salida, u.nombre, u.apellido
+       ORDER BY s.fecha_salida ASC`,
+      [startDate, endDate]
+    );
+
+    const total = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+    const workbook = buildReportWorkbook(
+      rows as Array<{
+        ticket: string;
+        fecha_salida: Date;
+        estado: string;
+        tipo_venta: string;
+        total: number;
+        vendedor: string;
+        productos: string;
+      }>,
+      total,
+      startDate,
+      endDate
+    );
+
+    const fileName = `reporte_salidas_${start}_${end}.xls`;
+    (res as any).setHeader("Content-Type", "application/vnd.ms-excel");
+    (res as any).setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.send(workbook);
+  } catch (error) {
+    console.error("Error generando reporte de salidas", error);
+    res.status(500).json({ message: "No se pudo generar el reporte" });
   }
 });
 

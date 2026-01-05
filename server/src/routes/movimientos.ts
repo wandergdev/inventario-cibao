@@ -112,7 +112,7 @@ movimientosRouter.get("/", requireAuth(adminRoles), async (req: AuthenticatedReq
     }
 
     const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-    const { rows } = await query(`${baseSelect} ${whereClause} ORDER BY m.fecha_movimiento DESC LIMIT 200`, params);
+    const { rows } = await query(`${baseSelect} ${whereClause} ORDER BY m.fecha_movimiento DESC`, params);
     res.json(rows.map(mapMovimiento));
   } catch (error) {
     console.error("Error listando movimientos", error);
