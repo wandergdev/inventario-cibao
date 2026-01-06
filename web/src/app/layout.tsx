@@ -4,7 +4,7 @@ import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   title: "Inventario Cibao",
-  description: "Sistema de inventario para Electro Cibao"
+  description: "Sistema de inventario para Inventario Cibao"
 };
 
 export default function RootLayout({

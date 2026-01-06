@@ -14,7 +14,9 @@ export default function SettingsPage() {
   const { userName, role, token } = useAuth();
   const [form, setForm] = useState({ newPassword: "", confirmPassword: "" });
   const [message, setMessage] = useState<string | null>(null);
-  const [messageVariant, setMessageVariant] = useState<"info" | "error" | "success" | null>(null);
+  const [messageVariant, setMessageVariant] = useState<
+    "info" | "error" | "success" | null
+  >(null);
   const [saving, setSaving] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -38,7 +40,7 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       await updateOwnPassword(token, {
-        newPassword: form.newPassword
+        newPassword: form.newPassword,
       });
       setMessage("Contraseña actualizada correctamente.");
       setMessageVariant("success");
@@ -55,22 +57,30 @@ export default function SettingsPage() {
     <AdminLayout active="Configuración">
       <div className="space-y-6 rounded-3xl border border-slate-100 bg-white/80 p-6 shadow-sm">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Perfil</p>
-          <h2 className="text-2xl font-semibold text-slate-900">Preferencias de cuenta</h2>
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+            Perfil
+          </p>
           <p className="text-sm text-slate-500">
             {userName ?? "Usuario"} · Rol: {role ?? "Sin rol"}
           </p>
         </div>
 
         <div className="space-y-4 rounded-2xl border border-slate-100 bg-white/90 p-6">
-          <h3 className="text-lg font-semibold text-slate-900">Actualiza tu contraseña</h3>
+          <h3 className="text-lg font-semibold text-slate-900">
+            Actualiza tu contraseña
+          </h3>
           <p className="text-sm text-slate-500">
-            Si recibiste una contraseña temporal, cámbiala por una que recuerdes. El administrador no podrá verla.
+            Si recibiste una contraseña temporal, cámbiala por una que
+            recuerdes.
           </p>
           {message && (
             <p
               className={`text-sm ${
-                messageVariant === "error" ? "text-rose-500" : messageVariant === "success" ? "text-emerald-600" : "text-slate-500"
+                messageVariant === "error"
+                  ? "text-rose-500"
+                  : messageVariant === "success"
+                  ? "text-emerald-600"
+                  : "text-slate-500"
               }`}
             >
               {message}
@@ -85,7 +95,12 @@ export default function SettingsPage() {
                 <Input
                   type={showNew ? "text" : "password"}
                   value={form.newPassword}
-                  onChange={(e) => setForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      newPassword: e.target.value,
+                    }))
+                  }
                   placeholder="••••••••"
                 />
                 <button
@@ -105,7 +120,12 @@ export default function SettingsPage() {
                 <Input
                   type={showConfirm ? "text" : "password"}
                   value={form.confirmPassword}
-                  onChange={(e) => setForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      confirmPassword: e.target.value,
+                    }))
+                  }
                   placeholder="••••••••"
                 />
                 <button
@@ -128,7 +148,8 @@ export default function SettingsPage() {
         {role === "Administrador" && (
           <div className="rounded-2xl border border-dashed border-slate-200 p-6">
             <p className="text-sm text-slate-500">
-              Pronto agregaremos ajustes avanzados (logo, unidades de negocio, flujos de aprobación) para administradores.
+              Pronto agregaremos ajustes avanzados (logo, unidades de negocio,
+              flujos de aprobación) para administradores.
             </p>
           </div>
         )}
