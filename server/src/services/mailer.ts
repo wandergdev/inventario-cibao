@@ -36,7 +36,7 @@ const buildTemplate = (name: string, role: string, to: string, password: string,
           <table width="600" cellpadding="0" cellspacing="0" style="margin:0 auto; background-color:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 12px 35px rgba(15,23,42,0.12);">
             <tr>
               <td style="background-color:#0b1540; padding:32px;">
-                <p style="margin:0; text-transform:uppercase; letter-spacing:4px; color:#60a5fa; font-size:12px;">Electro Cibao</p>
+                <p style="margin:0; text-transform:uppercase; letter-spacing:4px; color:#60a5fa; font-size:12px;">Inventario Cibao</p>
                 <h1 style="margin-top:12px; color:#ffffff; font-size:28px;">Bienvenido a Inventario</h1>
               </td>
             </tr>
@@ -44,7 +44,7 @@ const buildTemplate = (name: string, role: string, to: string, password: string,
               <td style="padding:32px;">
                 <p style="font-size:16px; color:#0f172a;">Hola <strong>${name}</strong>,</p>
                 <p style="font-size:15px; color:#475569; line-height:1.6;">
-                  Hemos creado un acceso para ti en la plataforma de inventario de Electro Cibao. Ya puedes ingresar y comenzar a trabajar con tu equipo.
+                  Hemos creado un acceso para ti en la plataforma de Inventario Cibao. Ya puedes ingresar y comenzar a trabajar con tu equipo.
                 </p>
                 <div style="margin:24px 0; padding:20px; border:1px solid #e2e8f0; border-radius:16px; background-color:#f8fafc;">
                   <p style="margin:0; font-size:14px; color:#0f172a;"><strong>Rol asignado:</strong> ${role}</p>
@@ -79,7 +79,7 @@ export const sendCredentialsEmail = async ({ to, name, password, role, senderEma
   }
 
   const appUrl = emailConfig.appUrl;
-  const subject = "Bienvenido a Electro Cibao";
+  const subject = "Bienvenido a Inventario Cibao";
   const html = buildTemplate(name, role, to, password, appUrl);
 
   try {
@@ -133,7 +133,7 @@ const buildSaleTemplate = (payload: SaleNotificationPayload) => {
           <table width="600" cellpadding="0" cellspacing="0" style="margin:0 auto; background-color:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 12px 35px rgba(15,23,42,0.12);">
             <tr>
               <td style="background-color:#0b1540; padding:32px;">
-                <p style="margin:0; text-transform:uppercase; letter-spacing:4px; color:#60a5fa; font-size:12px;">Electro Cibao</p>
+                <p style="margin:0; text-transform:uppercase; letter-spacing:4px; color:#60a5fa; font-size:12px;">Inventario Cibao</p>
                 <h1 style="margin-top:12px; color:#ffffff; font-size:24px;">Nueva salida registrada</h1>
               </td>
             </tr>
