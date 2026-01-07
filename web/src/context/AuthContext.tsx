@@ -57,6 +57,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("ic-role");
   }, []);
 
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      logout();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("ic:session-expired", handleSessionExpired);
+      return () => window.removeEventListener("ic:session-expired", handleSessionExpired);
+    }
+    return () => undefined;
+  }, [logout]);
+
   return (
     <AuthContext.Provider value={{ token, userName, userId, role, hydrated, login, logout }}>
       {children}

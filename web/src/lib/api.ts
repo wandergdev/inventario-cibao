@@ -20,9 +20,31 @@ const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
 const jsonHeaders = { "Content-Type": "application/json" } as const;
 
+const hasAuthHeader = (headers?: HeadersInit): boolean => {
+  if (!headers) {
+    return false;
+  }
+  if (headers instanceof Headers) {
+    return headers.has("Authorization");
+  }
+  if (Array.isArray(headers)) {
+    return headers.some(([key]) => key.toLowerCase() === "authorization");
+  }
+  if (typeof headers === "object" && headers !== null) {
+    return Object.keys(headers).some((key) => key.toLowerCase() === "authorization");
+  }
+  return false;
+};
+
 async function apiFetch<T>(path: string, init: RequestInit = {}) {
   const response = await fetch(`${API_URL}${path}`, init);
   if (!response.ok) {
+    if (response.status === 401 && hasAuthHeader(init.headers)) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("ic:session-expired"));
+      }
+      throw new Error("");
+    }
     const error = (await response.json().catch(() => ({}))) as ApiError;
     throw new Error(error.message ?? `Request failed (${response.status})`);
   }
