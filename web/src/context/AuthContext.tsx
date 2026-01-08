@@ -9,7 +9,7 @@ type AuthContextValue = {
   userId: string | null;
   role: string | null;
   hydrated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, remember: boolean) => Promise<void>;
   logout: () => void;
 };
 
@@ -23,27 +23,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("ic-token");
-    const storedUser = localStorage.getItem("ic-user");
-    const storedRole = localStorage.getItem("ic-role");
-    const storedUserId = localStorage.getItem("ic-user-id");
-    setToken(storedToken);
-    setUserName(storedUser);
-    setUserId(storedUserId);
-    setRole(storedRole);
+    if (typeof window === "undefined") {
+      return;
+    }
+    const storage =
+      window.localStorage.getItem("ic-token") !== null
+        ? window.localStorage
+        : window.sessionStorage.getItem("ic-token") !== null
+          ? window.sessionStorage
+          : null;
+    if (storage) {
+      setToken(storage.getItem("ic-token"));
+      setUserName(storage.getItem("ic-user"));
+      setUserId(storage.getItem("ic-user-id"));
+      setRole(storage.getItem("ic-role"));
+    }
     setHydrated(true);
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, remember: boolean) => {
     const session = await loginRequest(email, password);
     setToken(session.token);
     setUserName(`${session.user.nombre} ${session.user.apellido ?? ""}`.trim());
     setUserId(session.user.id);
     setRole(session.user.rol);
-    localStorage.setItem("ic-token", session.token);
-    localStorage.setItem("ic-user", `${session.user.nombre} ${session.user.apellido ?? ""}`.trim());
-    localStorage.setItem("ic-user-id", session.user.id);
-    localStorage.setItem("ic-role", session.user.rol);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("ic-token");
+      window.localStorage.removeItem("ic-user");
+      window.localStorage.removeItem("ic-user-id");
+      window.localStorage.removeItem("ic-role");
+      window.sessionStorage.removeItem("ic-token");
+      window.sessionStorage.removeItem("ic-user");
+      window.sessionStorage.removeItem("ic-user-id");
+      window.sessionStorage.removeItem("ic-role");
+      const targetStorage = remember ? window.localStorage : window.sessionStorage;
+      targetStorage.setItem("ic-token", session.token);
+      targetStorage.setItem("ic-user", `${session.user.nombre} ${session.user.apellido ?? ""}`.trim());
+      targetStorage.setItem("ic-user-id", session.user.id);
+      targetStorage.setItem("ic-role", session.user.rol);
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -51,10 +69,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserName(null);
     setUserId(null);
     setRole(null);
-    localStorage.removeItem("ic-token");
-    localStorage.removeItem("ic-user");
-    localStorage.removeItem("ic-user-id");
-    localStorage.removeItem("ic-role");
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("ic-token");
+      window.localStorage.removeItem("ic-user");
+      window.localStorage.removeItem("ic-user-id");
+      window.localStorage.removeItem("ic-role");
+      window.sessionStorage.removeItem("ic-token");
+      window.sessionStorage.removeItem("ic-user");
+      window.sessionStorage.removeItem("ic-user-id");
+      window.sessionStorage.removeItem("ic-role");
+    }
   }, []);
 
   useEffect(() => {

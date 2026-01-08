@@ -4,10 +4,11 @@ import Input from "@/components/ui/Input";
 import { Eye, EyeOff } from "lucide-react";
 
 type Props = {
-  onLogin: (email: string, password: string) => Promise<void>;
+  onLogin: (email: string, password: string, remember: boolean) => Promise<void>;
+  rememberSession: boolean;
 };
 
-export default function LoginPanel({ onLogin }: Props) {
+export default function LoginPanel({ onLogin, rememberSession }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +21,7 @@ export default function LoginPanel({ onLogin }: Props) {
     setError(null);
     setSuccess(null);
     try {
-      await onLogin(email, password);
+      await onLogin(email, password, rememberSession);
       setSuccess("Sesión iniciada correctamente");
     } catch (err) {
       setError((err as Error).message);

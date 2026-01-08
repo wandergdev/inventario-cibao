@@ -3,11 +3,12 @@
 import LoginPanel from "@/components/dashboard/LoginPanel";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function LoginScreen() {
   const { login, token, hydrated } = useAuth();
   const router = useRouter();
+  const [rememberSession, setRememberSession] = useState(false);
 
   useEffect(() => {
     if (hydrated && token) {
@@ -15,8 +16,8 @@ export default function LoginScreen() {
     }
   }, [hydrated, token, router]);
 
-  const handleLogin = async (email: string, password: string) => {
-    await login(email, password);
+  const handleLogin = async (email: string, password: string, remember: boolean) => {
+    await login(email, password, remember);
     router.replace("/dashboard");
   };
 
@@ -44,12 +45,14 @@ export default function LoginScreen() {
                 Ingresa tus credenciales para continuar.
               </p>
             </div>
-            <LoginPanel onLogin={handleLogin} />
+            <LoginPanel onLogin={handleLogin} rememberSession={rememberSession} />
             <div className="flex items-center justify-between text-xs text-slate-500">
               <label className="inline-flex items-center gap-2 text-slate-600">
                 <input
                   type="checkbox"
                   className="h-4 w-4 rounded border-slate-300"
+                  checked={rememberSession}
+                  onChange={(event) => setRememberSession(event.target.checked)}
                 />
                 Recordar sesión
               </label>
