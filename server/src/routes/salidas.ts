@@ -408,15 +408,22 @@ const escapeXml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-const buildReportWorkbook = (
+const buildWorkbookDocument = (worksheets: string[]) => `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ ${worksheets.join("\n")}
+</Workbook>`;
+
+const buildSalidasWorksheet = (
   rows: Array<{ ticket: string; fecha_salida: Date; estado: string; tipo_venta: string; total: number; vendedor: string; productos: string }>,
   total: number,
-  start: Date,
-  end: Date
+  rangeLabel: string
 ) => {
   const formatCurrency = (value: number) =>
     `RD$ ${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
-  const rangeLabel = `${start.toLocaleDateString("es-DO")} - ${end.toLocaleDateString("es-DO")}`;
   const headerRow = `
     <Row>
       <Cell><Data ss:Type="String">Ticket</Data></Cell>
@@ -431,7 +438,7 @@ const buildReportWorkbook = (
   const dataRows = rows.length
     ? rows
         .map(
-      (row) => `
+          (row) => `
     <Row>
       <Cell><Data ss:Type="String">${escapeXml(row.ticket)}</Data></Cell>
       <Cell><Data ss:Type="String">${escapeXml(new Date(row.fecha_salida).toLocaleString("es-DO"))}</Data></Cell>
@@ -441,8 +448,8 @@ const buildReportWorkbook = (
       <Cell><Data ss:Type="String">${escapeXml(row.tipo_venta ?? "")}</Data></Cell>
       <Cell><Data ss:Type="String">${escapeXml(formatCurrency(Number(row.total ?? 0)))}</Data></Cell>
     </Row>`
-      )
-      .join("")
+        )
+        .join("")
     : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin salidas registradas para este rango.</Data></Cell></Row>`;
 
   const totalRow = `
@@ -451,13 +458,7 @@ const buildReportWorkbook = (
       <Cell ss:MergeAcross="5"><Data ss:Type="String">${escapeXml(formatCurrency(total))}</Data></Cell>
     </Row>`;
 
-  return `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Worksheet ss:Name="Salidas">
+  return `<Worksheet ss:Name="Salidas">
   <Table>
     <Row>
       <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de salidas (${escapeXml(rangeLabel)})</Data></Cell>
@@ -466,8 +467,66 @@ const buildReportWorkbook = (
     ${dataRows}
     ${totalRow}
   </Table>
- </Worksheet>
-</Workbook>`;
+ </Worksheet>`;
+};
+
+const buildEntradasWorksheet = (
+  rows: Array<{
+    producto: string;
+    fecha_movimiento: Date;
+    cantidad: number;
+    stock_anterior: number;
+    stock_nuevo: number;
+    usuario: string;
+    observacion: string | null;
+  }>,
+  totalCantidad: number,
+  rangeLabel: string
+) => {
+  const headerRow = `
+    <Row>
+      <Cell><Data ss:Type="String">Producto</Data></Cell>
+      <Cell><Data ss:Type="String">Fecha</Data></Cell>
+      <Cell><Data ss:Type="String">Cantidad</Data></Cell>
+      <Cell><Data ss:Type="String">Stock anterior</Data></Cell>
+      <Cell><Data ss:Type="String">Stock nuevo</Data></Cell>
+      <Cell><Data ss:Type="String">Registrado por</Data></Cell>
+      <Cell><Data ss:Type="String">Observación</Data></Cell>
+    </Row>`;
+
+  const dataRows = rows.length
+    ? rows
+        .map(
+          (row) => `
+    <Row>
+      <Cell><Data ss:Type="String">${escapeXml(row.producto ?? "Sin producto")}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(new Date(row.fecha_movimiento).toLocaleString("es-DO"))}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Number(row.cantidad ?? 0)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Number(row.stock_anterior ?? 0)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Number(row.stock_nuevo ?? 0)}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(row.usuario ?? "Sistema")}</Data></Cell>
+      <Cell><Data ss:Type="String">${escapeXml(row.observacion ?? "—")}</Data></Cell>
+    </Row>`
+        )
+        .join("")
+    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin entradas registradas para este rango.</Data></Cell></Row>`;
+
+  const totalRow = `
+    <Row>
+      <Cell><Data ss:Type="String">Total unidades recibidas</Data></Cell>
+      <Cell ss:MergeAcross="5"><Data ss:Type="Number">${totalCantidad}</Data></Cell>
+    </Row>`;
+
+  return `<Worksheet ss:Name="Entradas">
+  <Table>
+    <Row>
+      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de entradas (${escapeXml(rangeLabel)})</Data></Cell>
+    </Row>
+    ${headerRow}
+    ${dataRows}
+    ${totalRow}
+  </Table>
+ </Worksheet>`;
 };
 
 /**
@@ -492,6 +551,13 @@ const buildReportWorkbook = (
  *         schema:
  *           type: string
  *           format: date
+ *       - in: query
+ *         name: scope
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [salidas, entradas, todo]
+ *         description: Define si se exportan solo salidas, solo entradas o ambos en hojas separadas. Por defecto salidas.
  *     responses:
  *       200:
  *         description: Archivo Excel generado
@@ -509,7 +575,7 @@ const buildReportWorkbook = (
  */
 salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { start, end } = req.query as { start?: string; end?: string };
+    const { start, end, scope: scopeParam } = req.query as { start?: string; end?: string; scope?: string };
     if (!start || !end) {
       return res.status(400).json({ message: "Debes especificar las fechas start y end (YYYY-MM-DD)" });
     }
@@ -521,57 +587,113 @@ salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: Authent
     }
     endDate.setHours(23, 59, 59, 999);
 
-    const { rows: rangeRows } = await query(`SELECT MIN(fecha_salida) AS min_fecha, MAX(fecha_salida) AS max_fecha FROM salidas_alm`);
-    const minFecha = rangeRows[0]?.min_fecha ? new Date(rangeRows[0].min_fecha) : null;
-    const maxFecha = rangeRows[0]?.max_fecha ? new Date(rangeRows[0].max_fecha) : null;
-    if (!minFecha || !maxFecha) {
-      return res.status(400).json({ message: "Aún no existen salidas registradas para generar reportes." });
+    const scope = (scopeParam ?? "salidas").toString().toLowerCase();
+    const validScopes = ["salidas", "entradas", "todo"];
+    if (!validScopes.includes(scope)) {
+      return res.status(400).json({ message: "El parámetro scope debe ser salidas, entradas o todo." });
     }
 
-    if (startDate < minFecha || endDate > maxFecha) {
-      return res.status(400).json({
-        message: `El rango debe estar entre ${minFecha.toLocaleDateString("es-DO")} y ${maxFecha.toLocaleDateString("es-DO")}.`
-      });
+    const includeSalidas = scope === "salidas" || scope === "todo";
+    const includeEntradas = scope === "entradas" || scope === "todo";
+    const worksheets: string[] = [];
+    const rangeLabel = `${startDate.toLocaleDateString("es-DO")} - ${endDate.toLocaleDateString("es-DO")}`;
+
+    let salidasRows: Array<{
+      ticket: string;
+      fecha_salida: Date;
+      estado: string;
+      tipo_venta: string;
+      total: number;
+      vendedor: string;
+      productos: string;
+    }> = [];
+
+    if (includeSalidas) {
+      const { rows } = await query(
+        `SELECT s.ticket,
+                s.fecha_salida,
+                s.estado,
+                s.tipo_venta,
+                s.total,
+                u.nombre || ' ' || u.apellido AS vendedor,
+                COALESCE(
+                  string_agg(p.nombre || ' x' || d.cantidad, ', ' ORDER BY p.nombre),
+                  'Sin productos'
+                ) AS productos
+         FROM salidas_alm s
+         INNER JOIN usuarios u ON u.id_usuario = s.id_vendedor
+         LEFT JOIN detalle_salidas d ON d.id_salida = s.id_salida
+         LEFT JOIN productos p ON p.id_producto = d.id_producto
+         WHERE s.fecha_salida BETWEEN $1 AND $2
+         GROUP BY s.id_salida, u.nombre, u.apellido
+         ORDER BY s.fecha_salida ASC`,
+        [startDate, endDate]
+      );
+
+      salidasRows = rows as typeof salidasRows;
+      if (scope === "salidas" && !salidasRows.length) {
+        return res.status(400).json({ message: "No se encontraron salidas en el rango seleccionado." });
+      }
+      const total = salidasRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+      worksheets.push(
+        buildSalidasWorksheet(
+          salidasRows,
+          total,
+          rangeLabel
+        )
+      );
     }
 
-    const { rows } = await query(
-      `SELECT s.ticket,
-              s.fecha_salida,
-              s.estado,
-              s.tipo_venta,
-              s.total,
-              u.nombre || ' ' || u.apellido AS vendedor,
-              COALESCE(
-                string_agg(p.nombre || ' x' || d.cantidad, ', ' ORDER BY p.nombre),
-                'Sin productos'
-              ) AS productos
-       FROM salidas_alm s
-       INNER JOIN usuarios u ON u.id_usuario = s.id_vendedor
-       LEFT JOIN detalle_salidas d ON d.id_salida = s.id_salida
-       LEFT JOIN productos p ON p.id_producto = d.id_producto
-       WHERE s.fecha_salida BETWEEN $1 AND $2
-       GROUP BY s.id_salida, u.nombre, u.apellido
-       ORDER BY s.fecha_salida ASC`,
-      [startDate, endDate]
-    );
+    let entradaRows: Array<{
+      producto: string;
+      fecha_movimiento: Date;
+      cantidad: number;
+      stock_anterior: number;
+      stock_nuevo: number;
+      usuario: string;
+      observacion: string | null;
+    }> = [];
 
-    const total = rows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
-    const workbook = buildReportWorkbook(
-      rows as Array<{
-        ticket: string;
-        fecha_salida: Date;
-        estado: string;
-        tipo_venta: string;
-        total: number;
-        vendedor: string;
-        productos: string;
-      }>,
-      total,
-      startDate,
-      endDate
-    );
+    if (includeEntradas) {
+      const { rows } = await query(
+        `SELECT m.fecha_movimiento,
+                m.cantidad,
+                m.stock_anterior,
+                m.stock_nuevo,
+                m.observacion,
+                p.nombre AS producto,
+                u.nombre || ' ' || u.apellido AS usuario
+         FROM movimientos_inv m
+         INNER JOIN productos p ON p.id_producto = m.id_producto
+         LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
+         WHERE m.tipo_movimiento = 'entrada'
+           AND m.fecha_movimiento BETWEEN $1 AND $2
+         ORDER BY m.fecha_movimiento ASC`,
+        [startDate, endDate]
+      );
 
-    const fileName = `reporte_salidas_${start}_${end}.xls`;
+      entradaRows = rows as typeof entradaRows;
+      if (scope === "entradas" && !entradaRows.length) {
+        return res.status(400).json({ message: "No se encontraron entradas en el rango seleccionado." });
+      }
+      const totalCantidad = entradaRows.reduce((sum, row) => sum + Number(row.cantidad ?? 0), 0);
+      worksheets.push(
+        buildEntradasWorksheet(
+          entradaRows,
+          totalCantidad,
+          rangeLabel
+        )
+      );
+    }
+
+    if (scope === "todo" && !salidasRows.length && !entradaRows.length) {
+      return res.status(400).json({ message: "No se encontraron movimientos en el rango seleccionado." });
+    }
+
+    const fileNameSuffix = scope === "todo" ? "movimientos" : scope;
+    const workbook = buildWorkbookDocument(worksheets);
+    const fileName = `reporte_${fileNameSuffix}_${start}_${end}.xls`;
+
     (res as any).setHeader("Content-Type", "application/vnd.ms-excel");
     (res as any).setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
     res.send(workbook);
