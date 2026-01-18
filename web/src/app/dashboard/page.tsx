@@ -6,8 +6,8 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import StatsGrid from "@/components/dashboard/StatsGrid";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { useAuth } from "@/context/AuthContext";
-import { fetchProducts, fetchSalidas } from "@/lib/api";
-import { Product, Salida } from "@/types";
+import { fetchPedidos, fetchProducts, fetchSalidas } from "@/lib/api";
+import { Pedido, Product, Salida } from "@/types";
 import { AlertTriangle, DollarSign, PackageCheck, ShoppingBag, Truck, UsersRound } from "lucide-react";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 
@@ -26,11 +26,17 @@ const isPendingSalidaEstado = (estado?: string | null) => {
   return true;
 };
 
+const getNumber = (value?: number | null) => {
+  const parsed = Number(value ?? 0);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 export default function DashboardPage() {
   const { hydrated } = useRequireAuth();
   const { role, token, userName, userId } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [salidas, setSalidas] = useState<Salida[]>([]);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,9 +46,14 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [productsData, salidasData] = await Promise.all([fetchProducts(token), fetchSalidas(token)]);
+        const [productsData, salidasData, pedidosData] = await Promise.all([
+          fetchProducts(token),
+          fetchSalidas(token),
+          fetchPedidos(token)
+        ]);
         setProducts(productsData);
         setSalidas(salidasData);
+        setPedidos(pedidosData);
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -62,7 +73,7 @@ export default function DashboardPage() {
     <AdminLayout active="Dashboard">
       {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
       {isAdmin ? (
-        <AdminDashboard salidas={salidas} products={products} loading={loading} />
+        <AdminDashboard salidas={salidas} products={products} pedidos={pedidos} loading={loading} />
       ) : (
         <VendorDashboard salidas={salidas} loading={loading} vendorName={userName} vendorId={userId} />
       )}
@@ -70,8 +81,33 @@ export default function DashboardPage() {
   );
 }
 
-function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; products: Product[]; loading: boolean }) {
-  const lowStock = useMemo(() => products.filter((p) => p.stockActual <= p.stockMinimo), [products]);
+function AdminDashboard({
+  salidas,
+  products,
+  pedidos,
+  loading
+}: {
+  salidas: Salida[];
+  products: Product[];
+  pedidos: Pedido[];
+  loading: boolean;
+}) {
+  const stockAlerts = useMemo(
+    () =>
+      products
+        .filter((product) => {
+          const stock = Number(product.stockActual ?? 0);
+          const minimum = Number(product.stockMinimo ?? 0);
+          return minimum > 0 && stock <= minimum;
+        })
+        .map((product) => ({
+          id: product.id,
+          nombre: product.nombre,
+          disponible: Number(product.stockActual ?? 0),
+          minimo: Number(product.stockMinimo ?? 0)
+        })),
+    [products]
+  );
   const currentMonthValue = useMemo(() => {
     const now = new Date();
     return salidas
@@ -85,7 +121,18 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
       }, 0);
   }, [salidas]);
 
-  const pendingSalidas = salidas.filter((s) => isPendingSalidaEstado(s.estado));
+  const pendingSalidas = useMemo(
+    () =>
+      salidas
+        .filter((salida) => isPendingSalidaEstado(salida.estado))
+        .map((salida) => ({
+          id: salida.id,
+          ticket: salida.ticket,
+          vendedor: salida.vendedor,
+          estado: salida.estado
+        })),
+    [salidas]
+  );
 
   const stats = [
     { label: "Productos en stock", value: products.length.toString(), caption: "Actualizado online", icon: PackageCheck },
@@ -97,16 +144,11 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
     },
     {
       label: "Stock en alerta",
-      value: lowStock.length.toString(),
+      value: stockAlerts.length.toString(),
       caption: "Por debajo del mínimo",
       icon: AlertTriangle
     },
     { label: "Salidas pendientes", value: pendingSalidas.length.toString(), caption: "Por entregar", icon: Truck }
-  ];
-
-  const alerts = [
-    ...lowStock.slice(0, 3).map((p) => ({ type: "stock", text: `Stock bajo: ${p.nombre}` })),
-    ...pendingSalidas.slice(0, 2).map((s) => ({ type: "pendiente", text: `Ticket ${s.ticket} pendiente de entrega` }))
   ];
 
   const [filterEstado, setFilterEstado] = useState("");
@@ -143,6 +185,57 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
         .filter((salida) => (filterEstado ? salida.estado === filterEstado : true))
         .slice(0, 5),
     [weeklySalidas, filterEstado]
+  );
+
+  const pedidoAlerts = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return pedidos
+      .filter((pedido) => {
+        const expected = pedido.fechaEsperada ? new Date(pedido.fechaEsperada) : null;
+        if (!expected) return false;
+        expected.setHours(0, 0, 0, 0);
+        if (expected >= today) return false;
+        const estado = (pedido.estado ?? "").toLowerCase();
+        if (estado.includes("recibido") || estado.includes("cancel")) return false;
+        if (pedido.fechaRecibido) return false;
+        return true;
+      })
+      .map((pedido) => ({
+        id: pedido.id,
+        etiqueta: pedido.producto ?? pedido.productoNombreReferencia ?? "Producto sin catalogar"
+      }));
+  }, [pedidos]);
+
+  const entregaAlerts = pendingSalidas;
+
+  const inactivityAlerts = useMemo(() => {
+    const now = Date.now();
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    return products
+      .filter((product) => {
+        const limit = Number(product.semanasMaxSinMovimiento ?? 0);
+        if (!limit) return false;
+        const last = product.ultimaFechaMovimiento ? new Date(product.ultimaFechaMovimiento) : null;
+        if (!last || Number.isNaN(last.getTime())) return false;
+        last.setHours(0, 0, 0, 0);
+        const diffWeeks = Math.floor((now - last.getTime()) / weekMs);
+        return diffWeeks >= limit;
+      })
+      .map((product) => ({
+        id: product.id,
+        nombre: product.nombre
+      }));
+  }, [products]);
+
+  const alerts = useMemo(
+    () => [
+      ...stockAlerts.map((alert) => ({ text: `Stock bajo: ${alert.nombre}`, color: "#ff8e5a", id: alert.id })),
+      ...pedidoAlerts.map((pedido) => ({ text: `Pedido retrasado: ${pedido.etiqueta}`, color: "#ffb347", id: pedido.id })),
+      ...entregaAlerts.map((salida) => ({ text: `Ticket ${salida.ticket} pendiente de entrega`, color: "#00a5ff", id: salida.id })),
+      ...inactivityAlerts.map((producto) => ({ text: `Sin movimiento: ${producto.nombre}`, color: "#6366f1", id: producto.id }))
+    ],
+    [stockAlerts, pedidoAlerts, entregaAlerts, inactivityAlerts]
   );
 
   return (
@@ -203,10 +296,7 @@ function AdminDashboard({ salidas, products, loading }: { salidas: Salida[]; pro
             <ul className="space-y-3 text-sm">
               {alerts.map((alert, index) => (
                 <li key={`${alert.text}-${index}`} className="flex items-center gap-2">
-                  <span
-                    className="block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: alert.type === "stock" ? "#ff8e5a" : "#00a5ff" }}
-                  />
+                  <span className="block h-2 w-2 rounded-full" style={{ backgroundColor: alert.color }} />
                   {alert.text}
                 </li>
               ))}
