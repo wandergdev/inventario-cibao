@@ -671,8 +671,18 @@ pedidosRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedRe
       ]);
 
       await client.query(
-        `INSERT INTO movimientos_inv (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, id_usuario, observacion)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO movimientos_inv (
+           id_producto,
+           tipo_movimiento,
+           cantidad,
+           stock_anterior,
+           stock_nuevo,
+           id_usuario,
+           observacion,
+           id_salida,
+           id_detalle_salida
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL)`,
         [productIdForUpdate, movimientoTipo, movimientoCantidad, stockActual, nuevoStock, tokenUser.id, mensaje]
       );
     }

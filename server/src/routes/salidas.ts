@@ -1,5 +1,6 @@
 import express from "express";
 import type { Response } from "express";
+import type { PoolClient } from "pg";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 import { pool, query } from "../db/pool";
 import { sendSaleNotificationEmail } from "../services/mailer";
@@ -94,6 +95,51 @@ const notifyAdminsOfSale = async (data: SaleNotificationData) => {
   }
 };
 
+const normalizeEstadoForTicket = (estado: string) => {
+  if (!estado) {
+    return "";
+  }
+  return estado
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .trim();
+};
+
+const buildTicketPrefix = (estado: string) => {
+  const normalized = normalizeEstadoForTicket(estado);
+  if (!normalized) {
+    return "TKT";
+  }
+  return normalized.replace(/\s+/g, "") || "TKT";
+};
+
+const formatTicketCode = (estado: string, ticketNumber: number) => {
+  const prefix = buildTicketPrefix(estado);
+  const suffix = Number.isFinite(ticketNumber) ? ticketNumber.toString().padStart(4, "0") : "0001";
+  return `${prefix}-${suffix}`;
+};
+
+const getNextTicketNumber = async (estado: string, client?: PoolClient) => {
+  const runner = client ?? pool;
+  const { rows } = await runner.query<{ consecutivo: number }>(
+    `INSERT INTO salida_ticket_sequences (estado, consecutivo)
+     VALUES ($1, 1)
+     ON CONFLICT (estado)
+     DO UPDATE SET consecutivo = salida_ticket_sequences.consecutivo + 1, actualizado_en = NOW()
+     RETURNING consecutivo`,
+    [estado]
+  );
+  return Number(rows[0]?.consecutivo ?? 1);
+};
+
+const assignTicketData = async (estado: string, client?: PoolClient) => {
+  const ticketNumber = await getNextTicketNumber(estado, client);
+  const ticketCode = formatTicketCode(estado, ticketNumber);
+  return { ticketNumber, ticketCode };
+};
+
 salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequest, res: Response) => {
   const body = (req.body ?? {}) as CreateSalidaBody;
   const tipoSalida = body.tipoSalida ?? "tienda";
@@ -172,24 +218,26 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
     });
 
     const total = details.reduce((sum, detail) => sum + detail.subtotal, 0);
-    const ticket = `T-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const { ticketNumber, ticketCode } = await assignTicketData(estado, client);
     const fechaEntrega = body.fechaEntrega ? new Date(body.fechaEntrega) : null;
 
     const salidaInsert = await client.query(
-      `INSERT INTO salidas_alm (id_vendedor, fecha_entrega, total, estado, ticket, tipo_salida, tipo_venta)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO salidas_alm (id_vendedor, fecha_entrega, total, estado, ticket, ticket_numero, tipo_salida, tipo_venta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id_salida, fecha_salida`,
-      [tokenUser.id, fechaEntrega, total, estado, ticket, tipoSalida, tipoVenta]
+      [tokenUser.id, fechaEntrega, total, estado, ticketCode, ticketNumber, tipoSalida, tipoVenta]
     );
 
     const salidaId = salidaInsert.rows[0].id_salida;
 
     for (const detail of details) {
-      await client.query(
+      const detailInsert = await client.query(
         `INSERT INTO detalle_salidas (id_salida, id_producto, cantidad, precio_unitario, subtotal)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id_detalle`,
         [salidaId, detail.productId, detail.cantidad, detail.precioUnitario, detail.subtotal]
       );
+      const detalleId = detailInsert.rows[0].id_detalle;
 
       await client.query(`UPDATE productos SET stock_actual = $1, ultima_fecha_movimiento = NOW() WHERE id_producto = $2`, [
         detail.stockNuevo,
@@ -197,8 +245,18 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
       ]);
 
       await client.query(
-        `INSERT INTO movimientos_inv (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, id_usuario, observacion)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO movimientos_inv (
+           id_producto,
+           tipo_movimiento,
+           cantidad,
+           stock_anterior,
+           stock_nuevo,
+           id_usuario,
+           observacion,
+           id_salida,
+           id_detalle_salida
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           detail.productId,
           "salida",
@@ -206,7 +264,9 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
           detail.stockAnterior,
           detail.stockNuevo,
           tokenUser.id,
-          `Salida ${ticket}`
+          `Salida ${ticketCode}`,
+          salidaId,
+          detalleId
         ]
       );
     }
@@ -214,7 +274,7 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
     await client.query("COMMIT");
 
     void notifyAdminsOfSale({
-      ticket,
+      ticket: ticketCode,
       total,
       estado,
       tipoVenta,
@@ -225,7 +285,8 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
 
     return res.status(201).json({
       id: salidaId,
-      ticket,
+      ticket: ticketCode,
+      ticket_numero: ticketNumber,
       total,
       estado,
       tipoSalida,
@@ -244,32 +305,57 @@ salidasRouter.post("/", requireAuth(allowedRoles), async (req: AuthenticatedRequ
 });
 
 salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params ?? {};
+  if (!id) {
+    return res.status(400).json({ message: "ID requerido" });
+  }
+
+  const { estado, fechaEntrega } = req.body ?? {};
+  if (estado === undefined && fechaEntrega === undefined) {
+    return res.status(400).json({ message: "No hay campos para actualizar" });
+  }
+
+  const client = await pool.connect();
   try {
-    const { id } = req.params ?? {};
-    if (!id) {
-      return res.status(400).json({ message: "ID requerido" });
+    await client.query("BEGIN");
+    const currentRes = await client.query<{ estado: string }>(
+      `SELECT estado FROM salidas_alm WHERE id_salida = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!currentRes.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Salida no encontrada" });
     }
 
-    const { estado, fechaEntrega } = req.body ?? {};
-    if (estado === undefined && fechaEntrega === undefined) {
-      return res.status(400).json({ message: "No hay campos para actualizar" });
-    }
-
+    const currentEstado = currentRes.rows[0].estado;
     const updates: string[] = [];
     const params: Array<any> = [];
+    let nextTicketNumber: number | null = null;
+    let nextTicketCode: string | null = null;
 
     if (estado !== undefined) {
       const estadosDisponibles = await getActiveStates();
       if (!estadosDisponibles.includes(estado)) {
+        await client.query("ROLLBACK");
         return res.status(400).json({ message: "Estado de salida no válido" });
       }
       updates.push(`estado = $${updates.length + 1}`);
       params.push(estado);
+      if (estado !== currentEstado) {
+        const ticketData = await assignTicketData(estado, client);
+        nextTicketNumber = ticketData.ticketNumber;
+        nextTicketCode = ticketData.ticketCode;
+        updates.push(`ticket_numero = $${updates.length + 1}`);
+        params.push(ticketData.ticketNumber);
+        updates.push(`ticket = $${updates.length + 1}`);
+        params.push(ticketData.ticketCode);
+      }
     }
 
     if (fechaEntrega !== undefined) {
       const parsedDate = fechaEntrega ? new Date(fechaEntrega) : null;
       if (fechaEntrega && Number.isNaN(parsedDate?.getTime() ?? Number.NaN)) {
+        await client.query("ROLLBACK");
         return res.status(400).json({ message: "Fecha de entrega no válida" });
       }
       updates.push(`fecha_entrega = $${updates.length + 1}`);
@@ -278,19 +364,29 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
 
     params.push(id);
 
-    const { rowCount } = await query(
+    const { rowCount } = await client.query(
       `UPDATE salidas_alm SET ${updates.join(", ")} WHERE id_salida = $${params.length}`,
       params
     );
 
     if (!rowCount) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ message: "Salida no encontrada" });
     }
 
-    res.json({ message: "Salida actualizada" });
+    await client.query("COMMIT");
+
+    res.json({
+      message: "Salida actualizada",
+      ticket: nextTicketCode ?? undefined,
+      ticket_numero: nextTicketNumber ?? undefined
+    });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error actualizando salida", error);
     res.status(500).json({ message: "Error interno" });
+  } finally {
+    client.release();
   }
 });
 
@@ -322,6 +418,10 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
  *         schema:
  *           type: string
  *           format: date-time
+ *       - in: query
+ *         name: ticket
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Listado de salidas con detalles
@@ -334,7 +434,7 @@ salidasRouter.patch("/:id", requireAuth(allowedRoles), async (req: Authenticated
  */
 salidasRouter.get("/", requireAuth(allowedRoles), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { estado, vendedorId, from, to } = req.query ?? {};
+    const { estado, vendedorId, from, to, ticket } = req.query ?? {};
     const filters: string[] = [];
     const params: Array<string> = [];
 
@@ -358,12 +458,21 @@ salidasRouter.get("/", requireAuth(allowedRoles), async (req: AuthenticatedReque
       params.push(to as string);
     }
 
+    if (ticket) {
+      const ticketValue = (ticket as string).trim();
+      if (ticketValue) {
+        filters.push(`(s.ticket ILIKE $${params.length + 1} OR CAST(s.ticket_numero AS TEXT) ILIKE $${params.length + 1})`);
+        params.push(`%${ticketValue}%`);
+      }
+    }
+
     const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
 
     const { rows } = await query(
       `SELECT
          s.id_salida AS id,
          s.ticket,
+         s.ticket_numero AS ticket_numero,
          s.fecha_salida,
          s.fecha_entrega,
          s.total,

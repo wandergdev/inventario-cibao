@@ -84,8 +84,10 @@ CREATE TABLE IF NOT EXISTS salidas_alm (
   total NUMERIC(10,2) NOT NULL,
   estado VARCHAR(50) NOT NULL DEFAULT 'Pendiente de entrega',
   ticket VARCHAR(100) UNIQUE NOT NULL,
+  ticket_numero INTEGER NOT NULL,
   tipo_salida VARCHAR(20) NOT NULL DEFAULT 'tienda',
-  tipo_venta VARCHAR(20) NOT NULL DEFAULT 'contado'
+  tipo_venta VARCHAR(20) NOT NULL DEFAULT 'contado',
+  CONSTRAINT salidas_alm_estado_ticket_numero_key UNIQUE (estado, ticket_numero)
 );
 
 CREATE TABLE IF NOT EXISTS salida_estados (
@@ -109,6 +111,12 @@ BEGIN
       FOREIGN KEY (estado) REFERENCES salida_estados(nombre) ON UPDATE CASCADE;
   END IF;
 END $$;
+
+CREATE TABLE IF NOT EXISTS salida_ticket_sequences (
+  estado VARCHAR(50) PRIMARY KEY REFERENCES salida_estados(nombre) ON UPDATE CASCADE ON DELETE CASCADE,
+  consecutivo INTEGER NOT NULL DEFAULT 0,
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS pedido_estados (
   id_estado UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -137,7 +145,9 @@ CREATE TABLE IF NOT EXISTS movimientos_inv (
   stock_nuevo INTEGER NOT NULL,
   id_usuario UUID NOT NULL REFERENCES usuarios(id_usuario),
   fecha_movimiento TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  observacion TEXT
+  observacion TEXT,
+  id_salida UUID REFERENCES salidas_alm(id_salida) ON DELETE SET NULL,
+  id_detalle_salida UUID REFERENCES detalle_salidas(id_detalle) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS pedidos_suplidores (
@@ -179,6 +189,8 @@ CREATE INDEX IF NOT EXISTS idx_salidas_fecha ON salidas_alm(fecha_salida);
 CREATE INDEX IF NOT EXISTS idx_salidas_vendedor ON salidas_alm(id_vendedor);
 CREATE INDEX IF NOT EXISTS idx_movimientos_producto ON movimientos_inv(id_producto);
 CREATE INDEX IF NOT EXISTS idx_movimientos_fecha ON movimientos_inv(fecha_movimiento);
+CREATE INDEX IF NOT EXISTS idx_movimientos_id_salida ON movimientos_inv(id_salida);
+CREATE INDEX IF NOT EXISTS idx_movimientos_id_detalle_salida ON movimientos_inv(id_detalle_salida);
 CREATE INDEX IF NOT EXISTS idx_pedidos_fecha_esperada ON pedidos_suplidores(fecha_esperada);
 
 -- Datos base opcionales -------------------------------------------------------------
