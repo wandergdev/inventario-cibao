@@ -10,6 +10,7 @@ import { fetchPedidos, fetchProducts, fetchSalidas } from "@/lib/api";
 import { Pedido, Product, Salida } from "@/types";
 import { AlertTriangle, DollarSign, PackageCheck, ShoppingBag, Truck, UsersRound } from "lucide-react";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import Input from "@/components/ui/Input";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatTipoVenta = (tipo?: string) => (tipo === "credito" ? "Crédito" : "Contado");
@@ -29,6 +30,57 @@ const isPendingSalidaEstado = (estado?: string | null) => {
 const getNumber = (value?: number | null) => {
   const parsed = Number(value ?? 0);
   return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const getTicketSequence = (salida?: Pick<Salida, "ticket_numero" | "ticketNumero">) => {
+  if (!salida) return null;
+  const value = salida.ticket_numero ?? salida.ticketNumero;
+  return typeof value === "number" ? value : null;
+};
+
+const formatTicketSequence = (value?: number | null) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return `#${parsed.toString().padStart(4, "0")}`;
+};
+
+const getEstadoBadgeClasses = (estado?: string | null) => {
+  const normalized = normalizeEstadoSalida(estado);
+  if (normalized.includes("apart")) {
+    return "bg-amber-100 text-amber-700";
+  }
+  if (normalized.includes("entreg")) {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (normalized.includes("pend")) {
+    return "bg-sky-100 text-sky-700";
+  }
+  return "bg-slate-100 text-slate-600";
+};
+
+const ticketMatchesQuery = (salida: Salida, normalizedText: string, numericFilter: string) => {
+  if (!normalizedText && !numericFilter) {
+    return true;
+  }
+  const ticketText = (salida.ticket ?? "").toLowerCase();
+  if (normalizedText && ticketText.includes(normalizedText)) {
+    return true;
+  }
+  if (numericFilter) {
+    const sequence = getTicketSequence(salida);
+    if (sequence !== null) {
+      const padded = sequence.toString().padStart(4, "0");
+      if (padded.includes(numericFilter)) {
+        return true;
+      }
+    }
+  }
+  return false;
 };
 
 export default function DashboardPage() {
@@ -152,6 +204,7 @@ function AdminDashboard({
   ];
 
   const [filterEstado, setFilterEstado] = useState("");
+  const [ticketFilter, setTicketFilter] = useState("");
   const weekRange = useMemo(() => {
     const now = new Date();
     const start = new Date(now);
@@ -164,6 +217,9 @@ function AdminDashboard({
     end.setHours(23, 59, 59, 999);
     return { start, end };
   }, []);
+  const trimmedTicketFilter = ticketFilter.trim();
+  const normalizedTicketFilter = trimmedTicketFilter.toLowerCase();
+  const numericTicketFilter = trimmedTicketFilter.replace(/[^0-9]/g, "");
 
   const weeklySalidas = useMemo(
     () =>
@@ -179,13 +235,30 @@ function AdminDashboard({
     return [{ value: "", label: "Todos los estados" }, ...unique.map((estado) => ({ value: estado, label: estado }))];
   }, [weeklySalidas]);
 
-  const recent = useMemo(
+  const filteredWeekly = useMemo(
     () =>
-      weeklySalidas
-        .filter((salida) => (filterEstado ? salida.estado === filterEstado : true))
-        .slice(0, 5),
-    [weeklySalidas, filterEstado]
+      weeklySalidas.filter((salida) => {
+        if (filterEstado && salida.estado !== filterEstado) {
+          return false;
+        }
+        return ticketMatchesQuery(salida, normalizedTicketFilter, numericTicketFilter);
+      }),
+    [weeklySalidas, filterEstado, normalizedTicketFilter, numericTicketFilter]
   );
+
+  const recent = useMemo(() => filteredWeekly.slice(0, 5), [filteredWeekly]);
+  const ticketLookupResult = useMemo(() => {
+    if (!trimmedTicketFilter) {
+      return null;
+    }
+    return (
+      salidas.find((salida) => ticketMatchesQuery(salida, normalizedTicketFilter, numericTicketFilter)) ?? null
+    );
+  }, [salidas, trimmedTicketFilter, normalizedTicketFilter, numericTicketFilter]);
+  const ticketLookupSequence = ticketLookupResult ? formatTicketSequence(getTicketSequence(ticketLookupResult)) : null;
+  const ticketLookupIsApartado = ticketLookupResult
+    ? normalizeEstadoSalida(ticketLookupResult.estado).includes("apart")
+    : false;
 
   const pedidoAlerts = useMemo(() => {
     const today = new Date();
@@ -243,16 +316,121 @@ function AdminDashboard({
       <StatsGrid stats={stats} />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Salidas de la semana" loading={loading}>
-          <div className="mb-4 flex flex-col gap-1">
-            <label className="text-xs uppercase text-slate-400">Filtrar por estado</label>
-            <SearchableSelect
-              className="w-56"
-              value={filterEstado}
-              onChange={(value) => setFilterEstado(value)}
-              options={estadoOptions}
-              placeholder="Todos los estados"
-            />
+          <div className="mb-4 flex flex-wrap gap-6">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs uppercase text-slate-400">Filtrar por estado</label>
+              <SearchableSelect
+                className="w-56"
+                value={filterEstado}
+                onChange={(value) => setFilterEstado(value)}
+                options={estadoOptions}
+                placeholder="Todos los estados"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs uppercase text-slate-400">Buscar ticket</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  className="w-64 max-w-full"
+                  placeholder="Ej. APARTADO-0004 o 0004"
+                  value={ticketFilter}
+                  onChange={(event) => setTicketFilter(event.target.value)}
+                />
+                {ticketFilter && (
+                  <button
+                    type="button"
+                    className="rounded-2xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                    onClick={() => setTicketFilter("")}
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">Filtra por código completo o solo por numeración (#0004).</p>
+            </div>
           </div>
+          {trimmedTicketFilter && (
+            <div className="mb-4 rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+              {ticketLookupResult ? (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase text-slate-400">Ticket encontrado</p>
+                      <p className="text-lg font-semibold text-slate-900">{ticketLookupResult.ticket}</p>
+                      {ticketLookupSequence && <p className="text-xs text-slate-500">Secuencia {ticketLookupSequence}</p>}
+                      <p className="text-xs text-slate-500">
+                        Registrado el {new Date(ticketLookupResult.fecha_salida).toLocaleString("es-DO")}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${getEstadoBadgeClasses(ticketLookupResult.estado)}`}
+                    >
+                      {ticketLookupResult.estado}
+                    </span>
+                  </div>
+                  {ticketLookupIsApartado ? (
+                    <p className="mt-3 text-sm font-semibold text-amber-600">
+                      Este ticket está apartado actualmente.
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-600">
+                      Estado actual:{" "}
+                      <span className="font-semibold text-slate-800">{ticketLookupResult.estado ?? "Sin estado"}</span>
+                    </p>
+                  )}
+                  <p className="mt-1 text-sm text-slate-500">
+                    Venta {formatTipoVenta(ticketLookupResult.tipo_venta ?? ticketLookupResult.tipoVenta)}
+                    {ticketLookupResult.vendedor ? ` · Registrado por ${ticketLookupResult.vendedor}` : ""}
+                  </p>
+                  <div className="mt-4 overflow-auto rounded-2xl border border-slate-100 bg-white">
+                    {ticketLookupResult.detalles && ticketLookupResult.detalles.length > 0 ? (
+                      <table className="min-w-full text-left text-xs text-slate-600 sm:text-sm">
+                        <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400 sm:text-xs">
+                          <tr>
+                            <th className="px-4 py-2">Producto</th>
+                            <th className="px-4 py-2">Cantidad</th>
+                            <th className="px-4 py-2">Precio</th>
+                            <th className="px-4 py-2">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ticketLookupResult.detalles.map((detalle, index) => (
+                            <tr key={`${ticketLookupResult.id}-detalle-${index}`} className="border-t border-slate-100">
+                              <td className="px-4 py-2 font-semibold text-slate-700">{detalle.producto}</td>
+                              <td className="px-4 py-2">{detalle.cantidad}</td>
+                              <td className="px-4 py-2">
+                                RD$ {currencyFormatter.format(Number(detalle.precioUnitario ?? 0))}
+                              </td>
+                              <td className="px-4 py-2">
+                                RD$ {currencyFormatter.format(Number(detalle.subtotal ?? 0))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p className="px-4 py-3 text-sm text-slate-500">No hay productos registrados en este ticket.</p>
+                    )}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-slate-500">
+                      Tipo de salida:{" "}
+                      <span className="font-semibold text-slate-700">
+                        {ticketLookupResult.tipo_salida ?? ticketLookupResult.tipoSalida ?? "Sin especificar"}
+                      </span>
+                    </p>
+                    <p className="text-base font-semibold text-slate-900">
+                      Total RD$ {currencyFormatter.format(Number(ticketLookupResult.total ?? 0))}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  No se encontró un ticket que coincida con &quot;{trimmedTicketFilter}&quot; en los registros recientes.
+                </p>
+              )}
+            </div>
+          )}
           {recent.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600">
               <p className="mb-2">Aún no se han registrado salidas en la semana actual.</p>
@@ -273,17 +451,25 @@ function AdminDashboard({
                   </tr>
                 </thead>
                 <tbody>
-                  {recent.map((salida) => (
-                    <tr key={salida.id} className="border-t border-slate-100">
-                      <td className="py-2 font-semibold text-slate-600">{salida.ticket}</td>
-                      <td className="py-2 text-slate-700">{salida.vendedor}</td>
-                      <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
-                      <td className="py-2 text-slate-500 capitalize">{formatTipoVenta(salida.tipo_venta ?? salida.tipoVenta)}</td>
-                      <td className="py-2 text-slate-900">
-                        RD$ {currencyFormatter.format(Number.isFinite(Number(salida.total)) ? Number(salida.total) : 0)}
-                      </td>
-                    </tr>
-                  ))}
+                  {recent.map((salida) => {
+                    const sequenceLabel = formatTicketSequence(getTicketSequence(salida));
+                    return (
+                      <tr key={salida.id} className="border-t border-slate-100">
+                        <td className="py-2 font-semibold text-slate-600">
+                          {salida.ticket}
+                          {sequenceLabel && <span className="ml-2 text-xs text-slate-400">{sequenceLabel}</span>}
+                        </td>
+                        <td className="py-2 text-slate-700">{salida.vendedor}</td>
+                        <td className="py-2 text-slate-500 capitalize">{salida.estado}</td>
+                        <td className="py-2 text-slate-500 capitalize">
+                          {formatTipoVenta(salida.tipo_venta ?? salida.tipoVenta)}
+                        </td>
+                        <td className="py-2 text-slate-900">
+                          RD$ {currencyFormatter.format(Number.isFinite(Number(salida.total)) ? Number(salida.total) : 0)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

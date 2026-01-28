@@ -38,6 +38,14 @@ const formatTipoVenta = (tipo?: string) => {
   return tipo === "credito" ? "Crédito" : "Contado";
 };
 
+const formatTicketSequence = (salida: Salida) => {
+  const value = salida.ticket_numero ?? salida.ticketNumero;
+  if (typeof value !== "number") {
+    return null;
+  }
+  return `#${value.toString().padStart(4, "0")}`;
+};
+
 export default function SalidasPage() {
   const { hydrated } = useRequireAuth();
   const { token, role } = useAuth();
@@ -59,6 +67,7 @@ export default function SalidasPage() {
   const [messageVariant, setMessageVariant] = useState<"info" | "success" | "error">("info");
   const [loading, setLoading] = useState(false);
   const [filterEstado, setFilterEstado] = useState("");
+  const [ticketFilter, setTicketFilter] = useState("");
   const [editingSalida, setEditingSalida] = useState<Salida | null>(null);
   const [editEstado, setEditEstado] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
@@ -173,32 +182,61 @@ export default function SalidasPage() {
 
   const canCreate = role === "Administrador" || role === "Vendedor";
 
+  const trimmedTicketFilter = ticketFilter.trim();
+  const ticketFilterLower = trimmedTicketFilter.toLowerCase();
+  const ticketDigits = trimmedTicketFilter.replace(/[^0-9]/g, "");
+
   const filteredSalidas = useMemo(
     () =>
-      salidas.filter((salida) =>
-        filterEstado ? salida.estado === filterEstado : true
-      ),
-    [salidas, filterEstado]
+      salidas.filter((salida) => {
+        if (filterEstado && salida.estado !== filterEstado) {
+          return false;
+        }
+        if (!ticketFilterLower && !ticketDigits) {
+          return true;
+        }
+        const ticketText = (salida.ticket ?? "").toLowerCase();
+        if (ticketFilterLower && ticketText.includes(ticketFilterLower)) {
+          return true;
+        }
+        if (ticketDigits) {
+          const sequence = salida.ticket_numero ?? salida.ticketNumero;
+          if (typeof sequence === "number") {
+            const padded = sequence.toString().padStart(4, "0");
+            if (padded.includes(ticketDigits)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }),
+    [salidas, filterEstado, ticketFilterLower, ticketDigits]
   );
 
-  const recentRows = filteredSalidas.slice(0, 10).map((s) => [
-    s.ticket,
-    s.vendedor,
-    s.estado,
-    formatTipoVenta(s.tipo_venta ?? s.tipoVenta),
-    `RD$ ${currencyFormatter.format(s.total)}`,
-    canCreate ? (
-      <Button
-        variant="subtle"
-        className="px-3 py-1 text-xs"
-        onClick={() => openEditSalida(s)}
-      >
-        Editar
-      </Button>
-    ) : (
-      "—"
-    ),
-  ]);
+  const recentRows = filteredSalidas.slice(0, 10).map((s) => {
+    const ticketSequence = formatTicketSequence(s);
+    return [
+      <div className="flex flex-col" key={`ticket-${s.id}`}>
+        <span className="font-semibold text-slate-600">{s.ticket}</span>
+        {ticketSequence && <span className="text-xs text-slate-400">{ticketSequence}</span>}
+      </div>,
+      s.vendedor,
+      s.estado,
+      formatTipoVenta(s.tipo_venta ?? s.tipoVenta),
+      `RD$ ${currencyFormatter.format(s.total)}`,
+      canCreate ? (
+        <Button
+          variant="subtle"
+          className="px-3 py-1 text-xs"
+          onClick={() => openEditSalida(s)}
+        >
+          Editar
+        </Button>
+      ) : (
+        "—"
+      ),
+    ];
+  });
 
   const totalItems = useMemo(
     () => lineItems.reduce((sum, item) => sum + item.cantidad, 0),
@@ -295,7 +333,7 @@ export default function SalidasPage() {
         <p className="text-sm text-slate-500">
           Últimos movimientos registrados
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs uppercase text-slate-400">
               Filtrar por estado
@@ -307,6 +345,29 @@ export default function SalidasPage() {
               options={filterStatusOptions}
               placeholder="Todos los estados"
             />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs uppercase text-slate-400">
+              Filtrar por ticket
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className="w-48"
+                placeholder="Ej. 0004 o APARTADO"
+                value={ticketFilter}
+                onChange={(event) => setTicketFilter(event.target.value)}
+              />
+              {ticketFilter && (
+                <button
+                  type="button"
+                  className="rounded-2xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  onClick={() => setTicketFilter("")}
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-slate-400">Busca por código completo o por numeración.</p>
           </div>
           {filterEstado && (
             <Button

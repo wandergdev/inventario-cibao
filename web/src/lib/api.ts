@@ -2,6 +2,7 @@ import {
   ApiError,
   LoginResponse,
   Movimiento,
+  MovimientoDetalle,
   Pedido,
   PedidoStatus,
   Product,
@@ -260,8 +261,29 @@ export async function updateProduct(
   });
 }
 
-export async function fetchSalidas(token: string) {
-  return apiFetch<Salida[]>("/salidas", {
+export async function fetchSalidas(
+  token: string,
+  filters?: { estado?: string; vendedorId?: string; from?: string; to?: string; ticket?: string }
+) {
+  const params = new URLSearchParams();
+  if (filters?.estado) {
+    params.set("estado", filters.estado);
+  }
+  if (filters?.vendedorId) {
+    params.set("vendedorId", filters.vendedorId);
+  }
+  if (filters?.from) {
+    params.set("from", filters.from);
+  }
+  if (filters?.to) {
+    params.set("to", filters.to);
+  }
+  if (filters?.ticket) {
+    params.set("ticket", filters.ticket);
+  }
+  const query = params.toString();
+  const search = query ? `?${query}` : "";
+  return apiFetch<Salida[]>(`/salidas${search}`, {
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }
@@ -489,6 +511,12 @@ export async function fetchMovimientos(
   }
   const query = params.size ? `?${params.toString()}` : "";
   return apiFetch<Movimiento[]>(`/movimientos${query}`, {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchMovimientoDetalle(token: string, id: string) {
+  return apiFetch<MovimientoDetalle>(`/movimientos/${id}/detail`, {
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
 }

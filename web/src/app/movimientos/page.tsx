@@ -6,15 +6,11 @@ import StatsGrid from "@/components/dashboard/StatsGrid";
 import useRequireAuth from "@/hooks/useRequireAuth";
 import { useAuth } from "@/context/AuthContext";
 import Input from "@/components/ui/Input";
-import { Movimiento, Product } from "@/types";
-import { fetchMovimientos, fetchProducts } from "@/lib/api";
-import {
-  Activity,
-  ArrowDownToLine,
-  ArrowUpToLine,
-  ArrowUpDown,
-} from "lucide-react";
+import { fetchMovimientoDetalle, fetchMovimientos, fetchProducts } from "@/lib/api";
+import { Activity, ArrowDownToLine, ArrowUpToLine, ArrowUpDown } from "lucide-react";
 import Alert from "@/components/ui/Alert";
+import Button from "@/components/ui/Button";
+import type { Movimiento, MovimientoDetalle, Product } from "@/types";
 
 const tipoOptions = [
   { value: "todos", label: "Todos los movimientos" },
@@ -27,6 +23,27 @@ const tipoClasses: Record<string, string> = {
   salida: "bg-rose-100 text-rose-700",
   entrada: "bg-emerald-100 text-emerald-700",
   ajuste: "bg-amber-100 text-amber-700",
+};
+
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const formatTipoVenta = (tipo?: string | null) => (tipo === "credito" ? "Crédito" : "Contado");
+
+const getTicketSequenceValue = (ticket?: { ticket_numero?: number; ticketNumero?: number | null } | null) => {
+  if (!ticket) return null;
+  const value = ticket.ticket_numero ?? ticket.ticketNumero;
+  return typeof value === "number" ? value : null;
+};
+
+const formatTicketSequence = (ticket?: { ticket_numero?: number; ticketNumero?: number | null } | null) => {
+  const value = getTicketSequenceValue(ticket);
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return `#${value.toString().padStart(4, "0")}`;
 };
 
 const formatDateTime = (value: string) =>
@@ -66,6 +83,11 @@ export default function MovimientosPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [detailMovimiento, setDetailMovimiento] = useState<Movimiento | null>(null);
+  const [movimientoDetalle, setMovimientoDetalle] = useState<MovimientoDetalle | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const isAdmin = role === "Administrador";
 
   const showAlert = (
@@ -193,6 +215,36 @@ export default function MovimientosPage() {
   const pageStart =
     filteredMovimientos.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const pageEnd = Math.min(filteredMovimientos.length, currentPage * pageSize);
+  const ticketDetail = movimientoDetalle?.ticket ?? null;
+  const movimientoResumen = movimientoDetalle?.movimiento ?? detailMovimiento;
+
+  const closeDetailModal = () => {
+    setDetailModalOpen(false);
+    setDetailMovimiento(null);
+    setMovimientoDetalle(null);
+    setDetailError(null);
+    setDetailLoading(false);
+  };
+
+  const handleOpenDetail = async (movimiento: Movimiento) => {
+    if (!token) {
+      showAlert("Sesión inválida", "error");
+      return;
+    }
+    setDetailModalOpen(true);
+    setDetailMovimiento(movimiento);
+    setMovimientoDetalle(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    try {
+      const data = await fetchMovimientoDetalle(token, movimiento.id);
+      setMovimientoDetalle(data);
+    } catch (error) {
+      setDetailError((error as Error).message || "No se pudo cargar el detalle");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   if (!hydrated) {
     return null;
@@ -290,6 +342,7 @@ export default function MovimientosPage() {
                     <th className="px-4 py-2">Fecha</th>
                     <th className="px-4 py-2">Usuario</th>
                     <th className="px-4 py-2">Observación</th>
+                    <th className="px-4 py-2 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -331,6 +384,16 @@ export default function MovimientosPage() {
                           movimiento.observacion,
                           movimiento.tipoMovimiento
                         )}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <Button
+                          variant="subtle"
+                          className="border border-slate-200 px-3 py-1 text-xs"
+                          type="button"
+                          onClick={() => handleOpenDetail(movimiento)}
+                        >
+                          Ver detalle
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -388,6 +451,206 @@ export default function MovimientosPage() {
           )}
         </div>
       </section>
+      {detailModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
+                  Detalle del movimiento
+                </p>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {movimientoResumen?.producto ?? "Movimiento"}
+                </h3>
+                {movimientoResumen && (
+                  <p className="text-xs text-slate-500">
+                    Registrado el {formatDateTime(movimientoResumen.fecha)}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:text-slate-700"
+                onClick={closeDetailModal}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              {detailLoading ? (
+                <p className="text-sm text-slate-500">Cargando detalle...</p>
+              ) : detailError ? (
+                <Alert variant="error" onDismiss={() => setDetailError(null)}>
+                  {detailError}
+                </Alert>
+              ) : (
+                <>
+                  {movimientoResumen && (
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                      <p className="text-xs uppercase text-slate-400">
+                        Información del movimiento
+                      </p>
+                      <div className="mt-3 grid gap-4 md:grid-cols-2">
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Tipo
+                          </p>
+                          <p className="text-sm text-slate-700 capitalize">
+                            {movimientoResumen.tipoMovimiento}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Observación
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {sanitizeObservation(
+                              movimientoResumen.observacion,
+                              movimientoResumen.tipoMovimiento
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Cantidad
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {movimientoResumen.cantidad}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Stock previo → nuevo
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {movimientoResumen.stockAnterior} →{" "}
+                            {movimientoResumen.stockNuevo}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {ticketDetail ? (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Ticket
+                          </p>
+                          <p className="text-lg font-semibold text-slate-900">
+                            {ticketDetail.ticket}
+                          </p>
+                          {formatTicketSequence(ticketDetail) && (
+                            <p className="text-xs text-slate-500">
+                              Secuencia {formatTicketSequence(ticketDetail)}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Estado
+                          </p>
+                          <p className="text-sm font-semibold text-slate-800">
+                            {ticketDetail.estado ?? "Sin estado"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Vendedor
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {ticketDetail.vendedor ?? "Sin asignar"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Tipo de venta
+                          </p>
+                          <p className="text-sm text-slate-700">
+                            {formatTipoVenta(
+                              ticketDetail.tipo_venta ?? ticketDetail.tipoVenta
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Tipo de salida
+                          </p>
+                          <p className="text-sm text-slate-700 capitalize">
+                            {ticketDetail.tipo_salida}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase text-slate-400">
+                            Total
+                          </p>
+                          <p className="text-lg font-semibold text-slate-900">
+                            RD$ {currencyFormatter.format(Number(ticketDetail.total ?? 0))}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                        <p className="text-xs uppercase text-slate-400">Productos</p>
+                        {ticketDetail.detalles && ticketDetail.detalles.length > 0 ? (
+                          <div className="mt-3 overflow-auto rounded-2xl border border-slate-100 bg-white">
+                            <table className="min-w-full text-left text-sm">
+                              <thead className="bg-slate-50 text-xs uppercase text-slate-400">
+                                <tr>
+                                  <th className="px-4 py-2">Producto</th>
+                                  <th className="px-4 py-2">Cantidad</th>
+                                  <th className="px-4 py-2">Precio</th>
+                                  <th className="px-4 py-2">Subtotal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ticketDetail.detalles.map((detalle, index) => (
+                                  <tr
+                                    key={`${ticketDetail.id}-detalle-${index}`}
+                                    className="border-t border-slate-100"
+                                  >
+                                    <td className="px-4 py-2 text-slate-700">
+                                      {detalle.producto}
+                                    </td>
+                                    <td className="px-4 py-2 text-slate-600">
+                                      {detalle.cantidad}
+                                    </td>
+                                    <td className="px-4 py-2 text-slate-600">
+                                      RD${" "}
+                                      {currencyFormatter.format(
+                                        Number(detalle.precioUnitario ?? 0)
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-2 text-slate-900">
+                                      RD${" "}
+                                      {currencyFormatter.format(
+                                        Number(detalle.subtotal ?? 0)
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm text-slate-500">
+                            No hay productos asociados a este ticket.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      {movimientoResumen?.tipoMovimiento === "entrada"
+                        ? "Este movimiento es una entrada de inventario y no está asociado a un ticket."
+                        : "No se encontró información de ticket para este movimiento."}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }
