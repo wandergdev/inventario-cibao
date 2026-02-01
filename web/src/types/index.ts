@@ -50,6 +50,35 @@ export type ProductType = {
   descripcion?: string | null;
 };
 
+export type PricingSettings = {
+  porcentajeTienda: number;
+  porcentajeRuta: number;
+  actualizadoEn: string | null;
+  actualizadoPor?: string | null;
+};
+
+export type ProductPricingOverride = {
+  id: string;
+  productoId: string;
+  producto: string;
+  porcentajeTienda: number | null;
+  porcentajeRuta: number | null;
+  actualizadoEn: string;
+  actualizadoPor?: string | null;
+  actualizadoPorNombre?: string | null;
+};
+
+export type ProductTypePricingOverride = {
+  id: string;
+  tipoId: string;
+  tipo: string;
+  porcentajeTienda: number | null;
+  porcentajeRuta: number | null;
+  actualizadoEn: string;
+  actualizadoPor?: string | null;
+  actualizadoPorNombre?: string | null;
+};
+
 export type Brand = {
   id: string;
   nombre: string;
@@ -107,6 +136,7 @@ export type Pedido = {
   suplidorId: string;
   suplidor: string;
   cantidadSolicitada: number;
+  precioCosto?: number | null;
   fechaPedido: string;
   fechaEsperada: string | null;
   fechaRecibido: string | null;

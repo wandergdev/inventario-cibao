@@ -6,7 +6,10 @@ import {
   Pedido,
   PedidoStatus,
   Product,
+  ProductPricingOverride,
   ProductType,
+  ProductTypePricingOverride,
+  PricingSettings,
   Supplier,
   Salida,
   Brand,
@@ -126,6 +129,75 @@ export async function updateProductType(
 
 export async function deleteProductType(token: string, id: string) {
   return apiFetch<void>(`/product-types/${id}`, {
+    method: "DELETE",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchPricingSettings(token: string) {
+  return apiFetch<PricingSettings>("/pricing/settings", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function updatePricingSettings(
+  token: string,
+  payload: { tiendaPercent: number; rutaPercent: number }
+) {
+  return apiFetch<PricingSettings>("/pricing/settings", {
+    method: "PUT",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchPricingOverrides(token: string, search?: string) {
+  const trimmed = search?.trim();
+  const qs = trimmed ? `?search=${encodeURIComponent(trimmed)}` : "";
+  return apiFetch<ProductPricingOverride[]>(`/pricing/overrides${qs}`, {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function updatePricingOverride(
+  token: string,
+  productId: string,
+  payload: { tiendaPercent: number; rutaPercent: number }
+) {
+  return apiFetch<ProductPricingOverride>(`/pricing/overrides/${productId}`, {
+    method: "PUT",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deletePricingOverride(token: string, productId: string) {
+  return apiFetch<void>(`/pricing/overrides/${productId}`, {
+    method: "DELETE",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function fetchPricingTypeOverrides(token: string) {
+  return apiFetch<ProductTypePricingOverride[]>("/pricing/type-overrides", {
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
+  });
+}
+
+export async function updatePricingTypeOverride(
+  token: string,
+  typeId: string,
+  payload: { tiendaPercent: number; rutaPercent: number }
+) {
+  return apiFetch<ProductTypePricingOverride>(`/pricing/type-overrides/${typeId}`, {
+    method: "PUT",
+    headers: { ...jsonHeaders, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deletePricingTypeOverride(token: string, typeId: string) {
+  return apiFetch<void>(`/pricing/type-overrides/${typeId}`, {
     method: "DELETE",
     headers: { ...jsonHeaders, Authorization: `Bearer ${token}` }
   });
@@ -476,6 +548,7 @@ export async function createPedido(
     brandId: string;
     modelId: string;
     productNameHint?: string;
+    precioCosto?: number;
   }
 ) {
   return apiFetch<Pedido>("/pedidos", {
@@ -488,7 +561,13 @@ export async function createPedido(
 export async function updatePedido(
   token: string,
   id: string,
-  payload: { estado?: string; cantidadSolicitada?: number; fechaEsperada?: string | null; fechaRecibido?: string | null }
+  payload: {
+    estado?: string;
+    cantidadSolicitada?: number;
+    fechaEsperada?: string | null;
+    fechaRecibido?: string | null;
+    precioCosto?: number | null;
+  }
 ) {
   return apiFetch<Pedido>(`/pedidos/${id}`, {
     method: "PATCH",

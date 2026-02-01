@@ -255,9 +255,6 @@ export default function ProductsPage() {
     if (!form.modeloId && !form.modeloNombre.trim()) {
       return showAlert("Selecciona un modelo o escribe uno nuevo", "error");
     }
-    if (!form.precioTienda || !form.precioRuta) {
-      return showAlert("Define los precios de tienda y ruta", "error");
-    }
     const parsedStockActual = Number(form.stockActual || 0);
     const parsedStockUnavailable = Number(form.stockNoDisponible || 0);
     const parsedStockMinimo = Number(form.stockMinimo || 0);
@@ -650,33 +647,25 @@ export default function ProductsPage() {
         <p className="text-xs uppercase text-slate-400">Precios y cantidades</p>
         <div className="mt-3 grid gap-4 md:grid-cols-3">
           <div>
-            <label className="text-xs uppercase text-slate-500">
-              Precio tienda <span className="text-red-500">*</span>
-            </label>
+            <label className="text-xs uppercase text-slate-500">Precio tienda</label>
             <Input
               type="number"
               min="0"
               step="0.01"
               placeholder="Ej. 12500"
               value={form.precioTienda}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, precioTienda: e.target.value }))
-              }
+              readOnly
             />
           </div>
           <div>
-            <label className="text-xs uppercase text-slate-500">
-              Precio ruta <span className="text-red-500">*</span>
-            </label>
+            <label className="text-xs uppercase text-slate-500">Precio ruta</label>
             <Input
               type="number"
               min="0"
               step="0.01"
               placeholder="Ej. 12900"
               value={form.precioRuta}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, precioRuta: e.target.value }))
-              }
+              readOnly
             />
           </div>
           <div>

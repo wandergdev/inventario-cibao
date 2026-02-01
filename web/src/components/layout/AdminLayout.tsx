@@ -23,6 +23,7 @@ import {
   BadgeHelp,
   Layers,
   ChevronDown,
+  Percent,
   type LucideIcon,
 } from "lucide-react";
 
@@ -99,6 +100,12 @@ const NAV_ITEMS: NavItem[] = [
         href: "/pedidos/estados",
         roles: ["Administrador"],
         icon: ClipboardCheck,
+      },
+      {
+        label: "Porcentajes de precios",
+        href: "/pedidos/precios",
+        roles: ["Administrador"],
+        icon: Percent,
       },
     ],
   },

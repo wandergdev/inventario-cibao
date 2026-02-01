@@ -24,6 +24,7 @@ import {
   updatePedido
 } from "@/lib/api";
 import Alert from "@/components/ui/Alert";
+import { formatMoneyFromNumber, formatMoneyInput, parseMoneyInput } from "@/utils/money";
 
 const normalizePedidoEstado = (value?: string | null) => (value ?? "").trim().toLowerCase();
 const isRecibidoPedidoEstado = (estado?: string | null) => {
@@ -54,13 +55,19 @@ const formatDate = (value?: string | null) => {
   return new Date(value).toLocaleDateString("es-DO");
 };
 
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
 const getInitialPedidoForm = () => ({
   productTypeId: "",
   modelId: "",
   brandId: "",
   supplierId: "",
   cantidad: 1,
-  fechaEsperada: ""
+  fechaEsperada: "",
+  precioCosto: ""
 });
 
 export default function PedidosPage() {
@@ -81,7 +88,7 @@ export default function PedidosPage() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [detailsPedido, setDetailsPedido] = useState<Pedido | null>(null);
   const [editingPedido, setEditingPedido] = useState<Pedido | null>(null);
-  const [editForm, setEditForm] = useState({ fechaEsperada: "", estado: "" });
+  const [editForm, setEditForm] = useState({ fechaEsperada: "", estado: "", precioCosto: "" });
   const [newBrandName, setNewBrandName] = useState("");
   const [newModelName, setNewModelName] = useState("");
   const [editSaving, setEditSaving] = useState(false);
@@ -177,6 +184,26 @@ export default function PedidosPage() {
       }
     ];
   }, [pedidos]);
+
+  const parsedPrecioCosto = useMemo(() => parseMoneyInput(form.precioCosto), [form.precioCosto]);
+
+  const costoTotalEstimado = useMemo(() => {
+    if (parsedPrecioCosto === null) {
+      return null;
+    }
+    const total = parsedPrecioCosto * Math.max(0, form.cantidad);
+    return Number.isFinite(total) ? total : null;
+  }, [parsedPrecioCosto, form.cantidad]);
+
+  const parsedEditPrecioCosto = useMemo(() => parseMoneyInput(editForm.precioCosto), [editForm.precioCosto]);
+
+  const editCostoTotal = useMemo(() => {
+    if (parsedEditPrecioCosto === null || !editingPedido) {
+      return null;
+    }
+    const total = parsedEditPrecioCosto * editingPedido.cantidadSolicitada;
+    return Number.isFinite(total) ? total : null;
+  }, [parsedEditPrecioCosto, editingPedido]);
 
   const availableBrandsForType = useMemo(() => {
     if (!form.productTypeId) {
@@ -356,6 +383,13 @@ export default function PedidosPage() {
     if (form.cantidad <= 0) {
       return showAlert("La cantidad debe ser mayor a 0", "error");
     }
+    const precioCostoValue = form.precioCosto ? parseMoneyInput(form.precioCosto) ?? undefined : undefined;
+    if (form.precioCosto && precioCostoValue === undefined) {
+      return showAlert("Ingresa un precio de costo válido (0 o mayor).", "error");
+    }
+    if (precioCostoValue !== undefined && precioCostoValue < 0) {
+      return showAlert("Ingresa un precio de costo válido (0 o mayor).", "error");
+    }
     setSaving(true);
     showAlert(null);
     try {
@@ -420,7 +454,8 @@ export default function PedidosPage() {
         productTypeId: form.productTypeId,
         brandId: targetBrandId,
         modelId: targetModelId,
-        productNameHint: autoName
+        productNameHint: autoName,
+        precioCosto: precioCostoValue
       });
       setForm(getInitialPedidoForm());
       setNewBrandName("");
@@ -443,14 +478,33 @@ export default function PedidosPage() {
     }
     setEditSaving(true);
     showAlert(null);
+    const precioCostoValue = (() => {
+      const raw = editForm.precioCosto.trim();
+      if (!raw) {
+        return null;
+      }
+      const parsed = parseMoneyInput(raw);
+      if (parsed === null || !Number.isFinite(parsed)) {
+        return undefined;
+      }
+      return parsed < 0 ? undefined : parsed;
+    })();
+
+    if (precioCostoValue === undefined) {
+      showAlert("Ingresa un precio de costo válido (0 o mayor).", "error");
+      setEditSaving(false);
+      return;
+    }
+
     try {
       await updatePedido(token, editingPedido.id, {
         fechaEsperada: editForm.fechaEsperada || null,
-        estado: editForm.estado
+        estado: editForm.estado,
+        precioCosto: precioCostoValue
       });
       showAlert("Pedido actualizado", "success");
       setEditingPedido(null);
-      setEditForm({ fechaEsperada: "", estado: "" });
+      setEditForm({ fechaEsperada: "", estado: "", precioCosto: "" });
       await loadData();
     } catch (error) {
       showAlert((error as Error).message, "error");
@@ -462,7 +516,7 @@ export default function PedidosPage() {
   const closeDetailsModal = () => setDetailsPedido(null);
   const closeEditModal = () => {
     setEditingPedido(null);
-    setEditForm({ fechaEsperada: "", estado: "" });
+    setEditForm({ fechaEsperada: "", estado: "", precioCosto: "" });
   };
 
   if (!hydrated) {
@@ -613,6 +667,34 @@ export default function PedidosPage() {
                 />
               </div>
               <div>
+                <label className="text-xs uppercase text-slate-400">Precio de costo</label>
+                <div className="space-y-1">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                      RD$
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Ej. 1,250.00"
+                      value={form.precioCosto}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          precioCosto: formatMoneyInput(event.target.value)
+                        }))
+                      }
+                      className="pl-14"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {costoTotalEstimado !== null
+                      ? `Total estimado: RD$ ${currencyFormatter.format(costoTotalEstimado)}`
+                      : "Ingresa el costo unitario para estimar el total."}
+                  </p>
+                </div>
+              </div>
+              <div>
                 <label className="text-xs uppercase text-slate-400">Cantidad</label>
                 <Input
                   type="number"
@@ -753,6 +835,8 @@ export default function PedidosPage() {
                   <th className="px-4 py-2">Producto</th>
                   <th className="px-4 py-2">Suplidor</th>
                   <th className="px-4 py-2">Cantidad</th>
+                  <th className="px-4 py-2">Precio unitario</th>
+                  <th className="px-4 py-2">Total pedido</th>
                   <th className="px-4 py-2">Estado</th>
                   <th className="px-4 py-2">Esperado</th>
                   <th className="px-4 py-2">Recibido</th>
@@ -767,6 +851,16 @@ export default function PedidosPage() {
                     <td className="px-4 py-2 font-medium text-slate-800">{pedido.producto}</td>
                     <td className="px-4 py-2 text-slate-600">{pedido.suplidor}</td>
                     <td className="px-4 py-2 text-slate-600">{pedido.cantidadSolicitada}</td>
+                    <td className="px-4 py-2 text-slate-600">
+                      {pedido.precioCosto !== null && pedido.precioCosto !== undefined
+                        ? `RD$ ${currencyFormatter.format(pedido.precioCosto)}`
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-slate-600">
+                      {pedido.precioCosto !== null && pedido.precioCosto !== undefined
+                        ? `RD$ ${currencyFormatter.format(pedido.precioCosto * pedido.cantidadSolicitada)}`
+                        : "—"}
+                    </td>
                     <td className="px-4 py-2">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusClasses[pedido.estado] ?? "bg-slate-100 text-slate-600"}`}
@@ -792,14 +886,15 @@ export default function PedidosPage() {
                             variant="subtle"
                             className="rounded-full px-5 py-2 text-xs font-semibold text-slate-600 shadow-sm"
                             onClick={() => {
-                              setEditingPedido(pedido);
-                              setEditForm({
-                                fechaEsperada: pedido.fechaEsperada ?? "",
-                                estado: pedido.estado
-                              });
-                            }}
-                          >
-                            Editar
+                          setEditingPedido(pedido);
+                          setEditForm({
+                            fechaEsperada: pedido.fechaEsperada ?? "",
+                            estado: pedido.estado,
+                            precioCosto: formatMoneyFromNumber(pedido.precioCosto)
+                          });
+                        }}
+                      >
+                        Editar
                           </Button>
                         </div>
                       </td>
@@ -832,6 +927,18 @@ export default function PedidosPage() {
             <div className="mt-4 space-y-3 text-sm text-slate-600">
               <p>
                 <span className="font-semibold text-slate-800">Cantidad:</span> {detailsPedido.cantidadSolicitada}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-800">Precio de costo:</span>{" "}
+                {detailsPedido.precioCosto !== null && detailsPedido.precioCosto !== undefined
+                  ? `RD$ ${currencyFormatter.format(detailsPedido.precioCosto)}`
+                  : "—"}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-800">Total pedido:</span>{" "}
+                {detailsPedido.precioCosto !== null && detailsPedido.precioCosto !== undefined
+                  ? `RD$ ${currencyFormatter.format(detailsPedido.precioCosto * detailsPedido.cantidadSolicitada)}`
+                  : "—"}
               </p>
               <p>
                 <span className="font-semibold text-slate-800">Estado:</span>{" "}
@@ -893,6 +1000,34 @@ export default function PedidosPage() {
                   placeholder="Selecciona estado"
                   searchPlaceholder="Buscar estado"
                 />
+              </div>
+            </div>
+            <div className="mt-4">
+              <label className="text-xs uppercase text-slate-400">Precio de costo</label>
+              <div className="space-y-1">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                    RD$
+                  </span>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Ej. 1,250.00"
+                    value={editForm.precioCosto}
+                    onChange={(event) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        precioCosto: formatMoneyInput(event.target.value)
+                      }))
+                    }
+                    className="pl-14"
+                  />
+                </div>
+                <p className="text-xs text-slate-500">
+                  {editCostoTotal !== null
+                    ? `Total actual del pedido: RD$ ${currencyFormatter.format(editCostoTotal)}`
+                    : `Cantidad solicitada: ${editingPedido?.cantidadSolicitada ?? "0"} unidades.`}
+                </p>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
