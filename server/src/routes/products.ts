@@ -1,7 +1,8 @@
 import express from "express";
 import type { Request, Response } from "express";
-import { query } from "../db/pool";
+import { pool, query } from "../db/pool";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
+import { applyPricingToProduct } from "../services/pricing";
 
 const productsRouter = express.Router();
 const adminRoles = ["Administrador"];
@@ -21,6 +22,7 @@ const baseSelect = `
          mo.nombre AS modelo_nombre,
          p.precio_tienda,
          p.precio_ruta,
+         p.precio_costo,
          p.stock_actual,
          p.stock_no_disponible,
          p.stock_minimo,
@@ -50,6 +52,7 @@ const mapProduct = (row: any) => ({
   modeloNombre: row.modelo_nombre,
   precioTienda: row.precio_tienda,
   precioRuta: row.precio_ruta,
+  precioCosto: row.precio_costo !== null ? Number(row.precio_costo) : null,
   stockActual: row.stock_actual,
   stockNoDisponible: row.stock_no_disponible,
   stockMinimo: row.stock_minimo,
@@ -158,6 +161,7 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
       modeloNombre,
       precioTienda,
       precioRuta,
+      precioCosto,
       stockActual: stockActualInput = 0,
       stockNoDisponible: stockNoDisponibleInput = 0,
       stockMinimo: stockMinimoInput = 0,
@@ -178,6 +182,29 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
 
     if (precioTienda === undefined || precioRuta === undefined) {
       return res.status(400).json({ message: "Debes indicar los precios de tienda y ruta" });
+    }
+
+    const precioTiendaValue = Number(precioTienda);
+    if (Number.isNaN(precioTiendaValue) || precioTiendaValue < 0) {
+      return res.status(400).json({ message: "Precio de tienda no válido" });
+    }
+
+    const precioRutaValue = Number(precioRuta);
+    if (Number.isNaN(precioRutaValue) || precioRutaValue < 0) {
+      return res.status(400).json({ message: "Precio de ruta no válido" });
+    }
+
+    let precioCostoValue: number | null = null;
+    if (precioCosto !== undefined) {
+      if (precioCosto === null) {
+        precioCostoValue = null;
+      } else {
+        const parsedCosto = Number(precioCosto);
+        if (Number.isNaN(parsedCosto) || parsedCosto < 0) {
+          return res.status(400).json({ message: "Precio de costo no válido" });
+        }
+        precioCostoValue = parsedCosto;
+      }
     }
 
     const stockActual = Number(stockActualInput ?? 0);
@@ -272,8 +299,8 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
     const cleanReason = typeof motivoNoDisponible === "string" ? motivoNoDisponible.trim() : null;
 
     const { rows } = await query(
-      `INSERT INTO productos (nombre, descripcion, id_tipo_producto, id_marca, id_modelo, precio_tienda, precio_ruta, stock_actual, stock_no_disponible, stock_minimo, stock_maximo, semanas_max_sin_movimiento, id_suplidor, disponible, motivo_no_disponible)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `INSERT INTO productos (nombre, descripcion, id_tipo_producto, id_marca, id_modelo, precio_tienda, precio_ruta, precio_costo, stock_actual, stock_no_disponible, stock_minimo, stock_maximo, semanas_max_sin_movimiento, id_suplidor, disponible, motivo_no_disponible)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
       [
         nombre,
@@ -281,8 +308,9 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
         tipoId,
         marcaId,
         finalModeloId,
-        precioTienda,
-        precioRuta,
+        precioTiendaValue,
+        precioRutaValue,
+        precioCostoValue,
         stockActual,
         stockNoDisponible,
         stockMinimo,
@@ -293,6 +321,26 @@ productsRouter.post("/", requireAuth(adminRoles), async (req: AuthenticatedReque
         cleanReason
       ]
     );
+
+    const newProductId = rows[0].id_producto;
+    if (precioCostoValue !== null) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await applyPricingToProduct(client, newProductId, precioCostoValue);
+        await client.query("COMMIT");
+      } catch (pricingError) {
+        await client.query("ROLLBACK");
+        console.error("Error aplicando precios al crear producto", pricingError);
+      } finally {
+        client.release();
+      }
+    }
+
+    const { rows: freshRows } = await query(`${baseSelect} WHERE p.id_producto = $1 LIMIT 1`, [newProductId]);
+    if (freshRows.length) {
+      return res.status(201).json(mapProduct(freshRows[0]));
+    }
 
     res.status(201).json(mapProduct(rows[0]));
   } catch (error: any) {
@@ -375,6 +423,8 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
     let targetMarcaId = body.marcaId ?? current.id_marca;
     let finalModeloId = current.id_modelo;
     let modeloChanged = false;
+    let targetPrecioCosto = current.precio_costo !== null ? Number(current.precio_costo) : null;
+    let shouldReapplyPricing = false;
 
     if (body.stockActual !== undefined) {
       const parsed = Number(body.stockActual);
@@ -511,6 +561,20 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
       setField("id_modelo", finalModeloId ?? null);
     }
 
+    if (body.precioCosto !== undefined) {
+      if (body.precioCosto === null) {
+        targetPrecioCosto = null;
+      } else {
+        const parsedCosto = Number(body.precioCosto);
+        if (Number.isNaN(parsedCosto) || parsedCosto < 0) {
+          return res.status(400).json({ message: "Precio de costo no válido" });
+        }
+        targetPrecioCosto = parsedCosto;
+      }
+      setField("precio_costo", targetPrecioCosto);
+      shouldReapplyPricing = true;
+    }
+
     if (targetStockMinimo > targetStockMaximo) {
       return res.status(400).json({ message: "El stock máximo debe ser mayor o igual al stock mínimo" });
     }
@@ -525,12 +589,28 @@ productsRouter.patch("/:id", requireAuth(adminRoles), async (req: AuthenticatedR
 
     params.push(id);
 
-    const { rows } = await query(
-      `UPDATE productos SET ${updates.join(", ")} WHERE id_producto = $${params.length} RETURNING *`,
-      params
-    );
+    await query(`UPDATE productos SET ${updates.join(", ")} WHERE id_producto = $${params.length}`, params);
 
-    res.json(mapProduct(rows[0]));
+    if (shouldReapplyPricing) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await applyPricingToProduct(client, id, targetPrecioCosto ?? null);
+        await client.query("COMMIT");
+      } catch (pricingError) {
+        await client.query("ROLLBACK");
+        console.error("Error aplicando precios al actualizar producto", pricingError);
+      } finally {
+        client.release();
+      }
+    }
+
+    const { rows: freshRows } = await query(`${baseSelect} WHERE p.id_producto = $1 LIMIT 1`, [id]);
+    if (!freshRows.length) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    res.json(mapProduct(freshRows[0]));
   } catch (error: any) {
     if (error?.code === "23505") {
       return res.status(409).json({
