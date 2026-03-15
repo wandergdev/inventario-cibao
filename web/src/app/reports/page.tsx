@@ -20,9 +20,8 @@ export default function ReportsPage() {
   const { hydrated } = useRequireAuth();
   const { role, token } = useAuth();
   const tabOptions: Array<{ value: ReportScope; label: string; caption: string }> = [
-    { value: "todo", label: "Todos", caption: "Entradas y salidas" },
-    { value: "salidas", label: "Salidas", caption: "Ventas y entregas" },
-    { value: "entradas", label: "Entradas", caption: "Reposiciones" }
+    { value: "salidas", label: "Salidas", caption: "Ventas y entregas divididas por mes" },
+    { value: "entradas", label: "Entradas", caption: "Reposiciones divididas por mes" }
   ];
   const [reportStart, setReportStart] = useState(() => {
     const firstDay = new Date();
@@ -86,7 +85,7 @@ export default function ReportsPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `reporte_salidas_${reportStart}_${reportEnd}.xls`;
+      link.download = `reporte_${activeScope}_${reportStart}_${reportEnd}.xls`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -108,7 +107,7 @@ export default function ReportsPage() {
           <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Panel</p>
           <h2 className="mt-1 text-3xl font-semibold text-slate-900">Reportes de movimientos</h2>
           <p className="text-sm text-slate-500">
-            Descarga un archivo Excel con las salidas, entradas o ambos registros durante el rango seleccionado.
+            Descarga reportes de salidas o entradas en Excel; cada archivo crea una hoja por cada mes dentro del rango seleccionado.
           </p>
         </div>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -147,9 +146,10 @@ export default function ReportsPage() {
             {feedback.text}
           </Alert>
         )}
-        <div className="flex justify-end">
+        <div className="flex flex-col items-end gap-2">
+          <p className="text-xs text-slate-500">El archivo incluirá pestañas por mes para {activeScope === "salidas" ? "las salidas" : "las entradas"}.</p>
           <Button onClick={handleDownload} disabled={downloading}>
-            {downloading ? "Generando..." : "Descargar Excel"}
+            {downloading ? "Generando..." : `Descargar ${activeScope === "salidas" ? "reporte de salidas" : "reporte de entradas"}`}
           </Button>
         </div>
       </div>

@@ -519,7 +519,7 @@ export async function fetchPedidos(token: string) {
   });
 }
 
-export type ReportScope = "salidas" | "entradas" | "todo";
+export type ReportScope = "salidas" | "entradas";
 
 export async function downloadMovimientosReport(token: string, start: string, end: string, scope: ReportScope = "salidas") {
   const url = new URL(`${API_URL}/salidas/report`);
