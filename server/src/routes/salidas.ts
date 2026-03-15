@@ -526,10 +526,80 @@ const buildWorkbookDocument = (worksheets: string[]) => `<?xml version="1.0"?>
  ${worksheets.join("\n")}
 </Workbook>`;
 
+const padMonth = (value: number) => value.toString().padStart(2, "0");
+const sanitizeWorksheetName = (value: string) => value.replace(/[\\\/?*\[\]:]/g, "-").slice(0, 31);
+const capitalize = (value: string) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : "");
+
+const formatMonthLabel = (date: Date) => {
+  const label = date.toLocaleString("es-DO", { month: "long", year: "numeric" });
+  return capitalize(label);
+};
+
+const formatMonthName = (date: Date) => {
+  const label = date.toLocaleString("es-DO", { month: "long" });
+  return capitalize(label);
+};
+
+type MonthBucket = {
+  key: string;
+  label: string;
+  worksheetName: string;
+  monthIndex: number;
+  year: number;
+};
+
+const buildMonthBuckets = (startDate: Date, endDate: Date, prefix: string): MonthBucket[] => {
+  const buckets: MonthBucket[] = [];
+  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const limit = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+  while (cursor <= limit) {
+    const year = cursor.getFullYear();
+    const monthIndex = cursor.getMonth();
+    const key = `${year}-${padMonth(monthIndex + 1)}`;
+    const monthName = formatMonthName(cursor);
+    buckets.push({
+      key,
+      label: formatMonthLabel(cursor),
+      worksheetName: `${prefix} ${monthName}-${year}`,
+      monthIndex,
+      year
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return buckets;
+};
+
+const toDateOrNull = (value: Date | string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const groupRowsByMonth = <T,>(rows: T[], getDate: (row: T) => Date | null) => {
+  const map = new Map<string, T[]>();
+  rows.forEach((row) => {
+    const date = getDate(row);
+    if (!date) {
+      return;
+    }
+    const key = `${date.getFullYear()}-${padMonth(date.getMonth() + 1)}`;
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key)!.push(row);
+  });
+  return map;
+};
+
 const buildSalidasWorksheet = (
   rows: Array<{ ticket: string; fecha_salida: Date; estado: string; tipo_venta: string; total: number; vendedor: string; productos: string }>,
   total: number,
-  rangeLabel: string
+  periodLabel: string,
+  worksheetName: string
 ) => {
   const formatCurrency = (value: number) =>
     `RD$ ${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
@@ -537,7 +607,7 @@ const buildSalidasWorksheet = (
     <Row>
       <Cell><Data ss:Type="String">Ticket</Data></Cell>
       <Cell><Data ss:Type="String">Fecha</Data></Cell>
-      <Cell><Data ss:Type="String">Vendedor</Data></Cell>
+      <Cell><Data ss:Type="String">Responsable</Data></Cell>
       <Cell><Data ss:Type="String">Productos</Data></Cell>
       <Cell><Data ss:Type="String">Estado</Data></Cell>
       <Cell><Data ss:Type="String">Tipo venta</Data></Cell>
@@ -559,7 +629,7 @@ const buildSalidasWorksheet = (
     </Row>`
         )
         .join("")
-    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin salidas registradas para este rango.</Data></Cell></Row>`;
+    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin salidas registradas en este período.</Data></Cell></Row>`;
 
   const totalRow = `
     <Row>
@@ -567,15 +637,21 @@ const buildSalidasWorksheet = (
       <Cell ss:MergeAcross="5"><Data ss:Type="String">${escapeXml(formatCurrency(total))}</Data></Cell>
     </Row>`;
 
-  return `<Worksheet ss:Name="Salidas">
+  const dataRowCount = rows.length > 0 ? rows.length : 1;
+  const headerRowIndex = 2;
+  const endRow = headerRowIndex + dataRowCount;
+  const autoFilterRange = `R${headerRowIndex}C1:R${endRow}C7`;
+
+  return `<Worksheet ss:Name="${escapeXml(sanitizeWorksheetName(worksheetName))}">
   <Table>
     <Row>
-      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de salidas (${escapeXml(rangeLabel)})</Data></Cell>
+      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de salidas (${escapeXml(periodLabel)})</Data></Cell>
     </Row>
     ${headerRow}
     ${dataRows}
     ${totalRow}
   </Table>
+  <x:AutoFilter x:Range="${autoFilterRange}" />
  </Worksheet>`;
 };
 
@@ -590,7 +666,8 @@ const buildEntradasWorksheet = (
     observacion: string | null;
   }>,
   totalCantidad: number,
-  rangeLabel: string
+  periodLabel: string,
+  worksheetName: string
 ) => {
   const headerRow = `
     <Row>
@@ -599,7 +676,7 @@ const buildEntradasWorksheet = (
       <Cell><Data ss:Type="String">Cantidad</Data></Cell>
       <Cell><Data ss:Type="String">Stock anterior</Data></Cell>
       <Cell><Data ss:Type="String">Stock nuevo</Data></Cell>
-      <Cell><Data ss:Type="String">Registrado por</Data></Cell>
+      <Cell><Data ss:Type="String">Responsable</Data></Cell>
       <Cell><Data ss:Type="String">Observación</Data></Cell>
     </Row>`;
 
@@ -618,7 +695,7 @@ const buildEntradasWorksheet = (
     </Row>`
         )
         .join("")
-    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin entradas registradas para este rango.</Data></Cell></Row>`;
+    : `<Row><Cell ss:MergeAcross="6"><Data ss:Type="String">Sin entradas registradas en este período.</Data></Cell></Row>`;
 
   const totalRow = `
     <Row>
@@ -626,15 +703,21 @@ const buildEntradasWorksheet = (
       <Cell ss:MergeAcross="5"><Data ss:Type="Number">${totalCantidad}</Data></Cell>
     </Row>`;
 
-  return `<Worksheet ss:Name="Entradas">
+  const dataRowCount = rows.length > 0 ? rows.length : 1;
+  const headerRowIndex = 2;
+  const endRow = headerRowIndex + dataRowCount;
+  const autoFilterRange = `R${headerRowIndex}C1:R${endRow}C7`;
+
+  return `<Worksheet ss:Name="${escapeXml(sanitizeWorksheetName(worksheetName))}">
   <Table>
     <Row>
-      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de entradas (${escapeXml(rangeLabel)})</Data></Cell>
+      <Cell ss:MergeAcross="5"><Data ss:Type="String">Reporte de entradas (${escapeXml(periodLabel)})</Data></Cell>
     </Row>
     ${headerRow}
     ${dataRows}
     ${totalRow}
   </Table>
+  <x:AutoFilter x:Range="${autoFilterRange}" />
  </Worksheet>`;
 };
 
@@ -665,8 +748,8 @@ const buildEntradasWorksheet = (
  *         required: false
  *         schema:
  *           type: string
- *           enum: [salidas, entradas, todo]
- *         description: Define si se exportan solo salidas, solo entradas o ambos en hojas separadas. Por defecto salidas.
+ *           enum: [salidas, entradas]
+ *         description: Define si se exportan salidas o entradas en hojas mensuales. Por defecto salidas.
  *     responses:
  *       200:
  *         description: Archivo Excel generado
@@ -697,25 +780,14 @@ salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: Authent
     endDate.setHours(23, 59, 59, 999);
 
     const scope = (scopeParam ?? "salidas").toString().toLowerCase();
-    const validScopes = ["salidas", "entradas", "todo"];
+    const validScopes = ["salidas", "entradas"];
     if (!validScopes.includes(scope)) {
-      return res.status(400).json({ message: "El parámetro scope debe ser salidas, entradas o todo." });
+      return res.status(400).json({ message: "El parámetro scope debe ser salidas o entradas." });
     }
 
-    const includeSalidas = scope === "salidas" || scope === "todo";
-    const includeEntradas = scope === "entradas" || scope === "todo";
+    const includeSalidas = scope === "salidas";
+    const includeEntradas = scope === "entradas";
     const worksheets: string[] = [];
-    const rangeLabel = `${startDate.toLocaleDateString("es-DO")} - ${endDate.toLocaleDateString("es-DO")}`;
-
-    let salidasRows: Array<{
-      ticket: string;
-      fecha_salida: Date;
-      estado: string;
-      tipo_venta: string;
-      total: number;
-      vendedor: string;
-      productos: string;
-    }> = [];
 
     if (includeSalidas) {
       const { rows } = await query(
@@ -739,29 +811,34 @@ salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: Authent
         [startDate, endDate]
       );
 
-      salidasRows = rows as typeof salidasRows;
+      const salidasRows = rows as Array<{
+        ticket: string;
+        fecha_salida: Date;
+        estado: string;
+        tipo_venta: string;
+        total: number;
+        vendedor: string;
+        productos: string;
+      }>;
+
       if (scope === "salidas" && !salidasRows.length) {
         return res.status(400).json({ message: "No se encontraron salidas en el rango seleccionado." });
       }
-      const total = salidasRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
-      worksheets.push(
-        buildSalidasWorksheet(
-          salidasRows,
-          total,
-          rangeLabel
-        )
-      );
+      const rowsByMonth = groupRowsByMonth(salidasRows, (row) => toDateOrNull(row.fecha_salida));
+      const buckets = buildMonthBuckets(startDate, endDate, "Salidas");
+      buckets.forEach((bucket) => {
+        const monthRows = rowsByMonth.get(bucket.key) ?? [];
+        const total = monthRows.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+        worksheets.push(
+          buildSalidasWorksheet(
+            monthRows,
+            total,
+            bucket.label,
+            bucket.worksheetName
+          )
+        );
+      });
     }
-
-    let entradaRows: Array<{
-      producto: string;
-      fecha_movimiento: Date;
-      cantidad: number;
-      stock_anterior: number;
-      stock_nuevo: number;
-      usuario: string;
-      observacion: string | null;
-    }> = [];
 
     if (includeEntradas) {
       const { rows } = await query(
@@ -781,25 +858,36 @@ salidasRouter.get("/report", requireAuth(["Administrador"]), async (req: Authent
         [startDate, endDate]
       );
 
-      entradaRows = rows as typeof entradaRows;
+      const entradaRows = rows as Array<{
+        producto: string;
+        fecha_movimiento: Date;
+        cantidad: number;
+        stock_anterior: number;
+        stock_nuevo: number;
+        usuario: string;
+        observacion: string | null;
+      }>;
+
       if (scope === "entradas" && !entradaRows.length) {
         return res.status(400).json({ message: "No se encontraron entradas en el rango seleccionado." });
       }
-      const totalCantidad = entradaRows.reduce((sum, row) => sum + Number(row.cantidad ?? 0), 0);
-      worksheets.push(
-        buildEntradasWorksheet(
-          entradaRows,
-          totalCantidad,
-          rangeLabel
-        )
-      );
+      const rowsByMonth = groupRowsByMonth(entradaRows, (row) => toDateOrNull(row.fecha_movimiento));
+      const buckets = buildMonthBuckets(startDate, endDate, "Entradas");
+      buckets.forEach((bucket) => {
+        const monthRows = rowsByMonth.get(bucket.key) ?? [];
+        const totalCantidad = monthRows.reduce((sum, row) => sum + Number(row.cantidad ?? 0), 0);
+        worksheets.push(
+          buildEntradasWorksheet(
+            monthRows,
+            totalCantidad,
+            bucket.label,
+            bucket.worksheetName
+          )
+        );
+      });
     }
 
-    if (scope === "todo" && !salidasRows.length && !entradaRows.length) {
-      return res.status(400).json({ message: "No se encontraron movimientos en el rango seleccionado." });
-    }
-
-    const fileNameSuffix = scope === "todo" ? "movimientos" : scope;
+    const fileNameSuffix = scope;
     const workbook = buildWorkbookDocument(worksheets);
     const fileName = `reporte_${fileNameSuffix}_${start}_${end}.xls`;
 
